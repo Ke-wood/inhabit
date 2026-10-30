@@ -80,8 +80,14 @@ def main() -> None:
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
+    # 全给了参数就完全不问 —— 方便脚本化 / CI
+    non_interactive = bool(args.name and args.persona)
+
     name = args.name or ask("她叫什么", "阿鱼")
-    aliases = args.aliases or ask("还有别的叫法吗（逗号分隔，可空）", "")
+    if non_interactive:
+        aliases = args.aliases
+    else:
+        aliases = args.aliases or ask("还有别的叫法吗（逗号分隔，可空）", "")
     persona = args.persona or ask(
         "一句话说她是谁（年龄/性别/底色，越短越稳）",
         "二十一岁，女的。话不多，但不冷；被问住了会老实说不知道。",
