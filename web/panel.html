@@ -1,0 +1,803 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>阿鱼 · 控制台</title>
+<style>
+:root{
+  --bg:#0e1116; --card:#161b22; --card2:#1b2129; --line:#252c36;
+  --fg:#e6edf3; --dim:#8b96a5; --accent:#58a6ff; --ok:#3fb950;
+  --warn:#d29922; --err:#f85149; --pos:#3fb950; --neg:#f85149;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--fg);
+  font:14px/1.6 -apple-system,"Segoe UI","Microsoft YaHei",sans-serif}
+.wrap{max-width:1240px;margin:0 auto;padding:22px 20px 60px}
+h1{font-size:20px;margin:0;font-weight:600;display:inline-block}
+.ver{font-size:12px;color:var(--dim);margin-left:10px}
+.bar{display:flex;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:18px}
+.dot{width:7px;height:7px;border-radius:50%;background:var(--ok);display:inline-block;
+  animation:pulse 2s infinite}
+@keyframes pulse{50%{opacity:.3}}
+.spacer{flex:1}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:14px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px 18px}
+.card h2{font-size:12px;color:var(--dim);font-weight:600;letter-spacing:.6px;
+  margin:0 0 12px;text-transform:uppercase}
+.who{white-space:pre-wrap;line-height:1.75}
+.stats{display:flex;gap:26px;flex-wrap:wrap}
+.stat b{display:block;font-size:22px;font-weight:600}
+.stat span{color:var(--dim);font-size:12px}
+table{width:100%;border-collapse:collapse}
+th{text-align:left;font-weight:500;color:var(--dim);font-size:12px;
+  padding:5px 7px;border-bottom:1px solid var(--line)}
+td{padding:6px 7px;border-bottom:1px solid #1b2129;vertical-align:top}
+tr:last-child td{border-bottom:none}
+.num{text-align:right;font-variant-numeric:tabular-nums}
+.pos{color:var(--pos)}.neg{color:var(--neg)}
+.dim{color:var(--dim);font-size:12px}
+.pill{display:inline-block;padding:2px 10px;border-radius:20px;font-size:12px;
+  background:#21262d;color:var(--dim)}
+.pill.awake{background:#12261a;color:var(--ok)}
+.pill.focus{background:#2a2033;color:#bc8cff}
+button{background:#21262d;color:var(--fg);border:1px solid var(--line);
+  border-radius:8px;padding:7px 14px;font-size:13px;cursor:pointer;font-family:inherit}
+button:hover{background:#2d333b;border-color:#3d444d}
+button.primary{background:#1f6feb;border-color:#1f6feb;color:#fff}
+button.primary:hover{background:#388bfd}
+button.danger{color:var(--err)}
+input[type=number],input[type=text],textarea{
+  background:#0d1117;border:1px solid var(--line);border-radius:8px;
+  color:var(--fg);padding:7px 10px;font-size:13px;font-family:inherit;outline:none}
+input:focus,textarea:focus{border-color:var(--accent)}
+textarea{width:100%;min-height:160px;resize:vertical;line-height:1.7}
+input[type=range]{width:100%;accent-color:var(--accent)}
+.row{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.thr{border-bottom:1px solid #1b2129;padding:11px 0}
+.thr:last-child{border-bottom:none}
+.thr .top{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:5px}
+.thr .name{font-size:13px}
+.thr .val{color:var(--accent);font-variant-numeric:tabular-nums;font-size:13px}
+.sw{display:flex;justify-content:space-between;align-items:center;padding:9px 0;
+  border-bottom:1px solid #1b2129}
+.sw:last-child{border-bottom:none}
+.toggle{position:relative;width:42px;height:23px;flex:none}
+.toggle input{opacity:0;width:0;height:0}
+.slider{position:absolute;inset:0;background:#30363d;border-radius:23px;
+  cursor:pointer;transition:.2s}
+.slider:before{content:"";position:absolute;width:17px;height:17px;left:3px;top:3px;
+  background:#8b96a5;border-radius:50%;transition:.2s}
+.toggle input:checked + .slider{background:#1f6feb}
+.toggle input:checked + .slider:before{transform:translateX(19px);background:#fff}
+.toast{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);
+  background:#1f6feb;color:#fff;padding:9px 18px;border-radius:10px;font-size:13px;
+  opacity:0;transition:.25s;pointer-events:none;z-index:99}
+.toast.show{opacity:1}
+.toast.err{background:#da3633}
+details{background:var(--card);border:1px solid var(--line);border-radius:12px;
+  padding:14px 18px;margin-bottom:14px}
+summary{cursor:pointer;color:var(--dim);font-size:13px;font-weight:600;letter-spacing:.5px}
+details[open] summary{margin-bottom:12px}
+details ol{padding-left:20px;line-height:1.9;color:#c9d1d9}
+details code{background:#0d1117;padding:1px 6px;border-radius:4px;color:var(--accent);font-size:12px}
+.hint{color:var(--dim);font-size:12px;margin-top:6px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<div class="bar">
+  <h1>阿鱼</h1><span class="ver" id="ver"></span>
+  <span class="dot"></span><span class="dim" id="clock">连接中…</span>
+  <span class="spacer"></span>
+  <span class="dim">查看</span>
+  <select id="profileSel" onchange="switchProfile(this.value)"
+    style="background:#0d1117;border:1px solid var(--line);border-radius:8px;
+           color:var(--fg);padding:6px 10px;font-size:13px"></select>
+  <button onclick="newProfile()">新建</button>
+  <span class="pill" id="runState">—</span>
+  <button class="primary" id="btnStart" onclick="runRole('start')">启动</button>
+  <button id="btnStop" onclick="runRole('stop')">关闭</button>
+  <button onclick="ctrl('wake')">叫醒</button>
+  <button onclick="ctrl('sleep')">让她睡</button>
+</div>
+<div id="lockTip" class="card" style="margin-bottom:14px;display:none;
+     border-color:#5a4a1f;background:#241f12;color:#e3b341;font-size:13px">
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>她是谁</h2>
+    <div class="who" id="identity">—</div>
+  </div>
+  <div class="card">
+    <h2>现在</h2>
+    <p><span class="pill" id="sleepState">—</span> <span class="pill" id="focusState" style="display:none"></span></p>
+    <p id="vitals">—</p>
+    <div class="stats" id="counts" style="margin-top:10px"></div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>思考模式</h2>
+  <div class="row">
+    <input type="number" id="focusMin" value="10" min="1" max="60" style="width:80px">
+    <span class="dim">分钟</span>
+    <input type="text" id="focusTopic" placeholder="想什么（可不填）" style="flex:1;min-width:180px">
+    <button class="primary" onclick="startFocus()">开启</button>
+    <button onclick="stopFocus()">关闭</button>
+  </div>
+  <div class="hint">开启后她每隔 <span id="focusGapHint">20</span> 秒想一次，到点自动恢复。</div>
+</div>
+
+<div class="grid">
+  <div class="card"><h2>阈值</h2><div id="thresholds"></div></div>
+  <div class="card"><h2>开关</h2><div id="switches"></div></div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>好感度</h2>
+    <table><thead><tr><th>人</th><th class="num">好感</th><th>标签</th><th class="num">熟悉</th></tr></thead>
+    <tbody id="rels"></tbody></table>
+  </div>
+  <div class="card"><h2>悬着的事</h2><ul id="loops" style="padding-left:18px;margin:0"></ul></div>
+</div>
+
+<div class="grid">
+  <div class="card">
+    <h2>最近念头</h2>
+    <table><thead><tr><th>时间</th><th>念头</th><th class="num">劲头</th></tr></thead>
+    <tbody id="thoughts"></tbody></table>
+  </div>
+  <div class="card">
+    <h2>人设（我是谁.md）</h2>
+    <textarea id="identityText" style="min-height:320px"></textarea>
+    <div class="row" style="margin-top:8px">
+      <button class="primary" id="btnSaveIdent" onclick="saveIdentity()">保存人设</button>
+      <span class="dim">推荐 50～200 字 · 用「我是…」的口吻写</span>
+    </div>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>我自己的记忆（我自己的记忆.md）</h2>
+  <textarea id="memoryText"></textarea>
+  <div class="row" style="margin-top:8px">
+    <button class="primary" id="btnSaveMem" onclick="saveMemory()">保存记忆</button>
+    <span class="dim">这个文件是她自己往里写的，你也可以直接改。</span>
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <div class="row" style="margin:0">
+    <h2 style="margin:0">教程</h2>
+    <span class="spacer"></span>
+    <label class="toggle"><input type="checkbox" id="tutSwitch" onchange="toggleTut(this.checked)">
+      <span class="slider"></span></label>
+  </div>
+  <div id="tutorial" style="display:none;margin-top:12px">
+    <ol style="padding-left:20px;line-height:2;color:#c9d1d9">
+      <li><b>阈值</b>：拖动滑块即可，<b>下一拍就生效</b>。运行中的角色要先去顶部点「关闭」才能改。</li>
+      <li><b>思考模式</b>：填分钟数点开启，她会围绕这个主题高频思考（默认 20 秒一拍），到点自动恢复。</li>
+      <li><b>人设</b>：就是 <code>我是谁.md</code>。推荐 50～200 字，用「我是…」的口吻写，改完下一轮「想」时生效。</li>
+      <li><b>记忆</b>：<code>我自己的记忆.md</code>。她 <code>remember</code> 时会往里写，你也可以直接改。</li>
+      <li><b>好感度</b>：点人名可以展开这个人的全部记忆，每条都能改或删。</li>
+      <li><b>渠道</b>：可以加任意多个。场景名带前缀就自动分流，比如 <code>tg_</code> → Telegram 渠道。</li>
+      <li><b>配置体检</b>：哪项没配好会标黄或红，照着提示补。</li>
+    </ol>
+  </div>
+</div>
+
+</div>
+<div class="card" style="margin-bottom:14px">
+  <h2>大脑 / API</h2>
+  <div class="row" style="gap:8px;flex-wrap:wrap">
+    <input type="text" id="apiBase" placeholder="接口地址，如 https://api.deepseek.com/v1" style="flex:1;min-width:240px">
+    <input type="text" id="apiKey" placeholder="API Key" style="flex:1;min-width:200px">
+    <input type="text" id="apiModel" placeholder="模型名，如 deepseek-chat" style="width:190px">
+    <button class="primary" onclick="saveApi()">保存</button>
+  </div>
+  <div class="hint">留空则读环境变量 DEEPSEEK_API_KEY / OPENAI_API_KEY；任何 OpenAI 兼容端点都行。</div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>Bilibili（当前角色专用）</h2>
+  <div class="row" style="gap:8px;flex-wrap:wrap">
+    <input type="text" id="biliCookie" placeholder="整行粘贴，例如 SESSDATA=xxx; bili_jct=xxx; DedeUserID=xxx; buvid3=xxx"
+           style="flex:1;min-width:300px">
+    <button class="primary" onclick="saveBili()">保存</button>
+  </div>
+  <div class="hint">
+    需要的字段：<code>SESSDATA</code> <code>bili_jct</code> <code>DedeUserID</code> <code>buvid3</code>
+    （sessdata 管登录，bili_jct 管发评论/点赞，少了它会 -111 CSRF 校验失败）<br>
+    取法：浏览器登录 b 站 → F12 → Application → Cookies → bilibili.com → 把这几项拼成一行。<br>
+    留空则读 <code>data/secrets/bili_cookie.txt</code>。这个 cookie 只属于当前角色，别的角色各有一份。
+  </div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>教程轮 · 让她自己看设定</h2>
+  <div class="row" style="gap:8px;flex-wrap:wrap">
+    <button onclick="runTutorial('loops')">清理悬着的事</button>
+    <button onclick="runTutorial('identity')">确认自己的人设</button>
+    <button onclick="runTutorial('prompt')">评审收到的 prompt</button>
+    <span class="dim">轮数</span>
+    <input type="number" id="tutRounds" value="1" min="1" max="9" style="width:70px">
+  </div>
+  <div class="row" style="gap:8px;flex-wrap:wrap;margin-top:10px;
+       border-top:1px solid var(--line);padding-top:10px">
+    <span class="dim">整理记忆</span>
+    <select id="memWho" onchange="updateCats()" style="background:#0d1117;border:1px solid var(--line);
+            border-radius:8px;color:var(--fg);padding:7px 10px;font-size:13px;min-width:150px">
+    </select>
+    <span class="dim">每批</span>
+    <input type="number" id="memBatch" value="8" min="1" max="20" style="width:70px">
+    <button class="primary" onclick="runMemory()">开始整理</button>
+  </div>
+  <div id="memCats" class="hint" style="margin-top:6px"></div>
+  <div class="hint">不是给她加功能，是把「她一直在用、但从没被告知过的东西」摊开给她看，改不改她自己决定。</div>
+  <pre id="tutLog" style="display:none;margin-top:10px;max-height:300px;overflow:auto;
+       background:#0b0e12;border:1px solid var(--line);border-radius:8px;padding:12px;
+       font-size:12px;line-height:1.6;white-space:pre-wrap"></pre>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>能说话的渠道</h2>
+  <div id="channels"></div>
+  <div class="row" style="margin-top:12px;gap:6px;flex-wrap:wrap;
+       border-top:1px solid var(--line);padding-top:12px">
+    <input id="chNewName" placeholder="名称，如 telegram" style="width:150px">
+    <select id="chNewKind" style="background:#0d1117;border:1px solid var(--line);
+            border-radius:8px;color:var(--fg);padding:7px 10px;font-size:13px">
+      <option value="onebot">OneBot（QQ 系）</option>
+      <option value="http">通用 HTTP</option>
+      <option value="wechat_hook">微信 hook</option>
+    </select>
+    <input id="chNewUrl" placeholder="地址，如 http://127.0.0.1:8080" style="flex:1;min-width:180px">
+    <input id="chNewPrefix" placeholder="场景前缀，如 tg_" style="width:150px">
+    <button class="primary" onclick="addChannel()">添加渠道</button>
+  </div>
+  <div class="hint">一个角色可以同时挂多个渠道，按场景前缀分流（<code>wxid_</code>→微信、<code>qq_group_</code>→QQ）。改完重启生效。</div>
+</div>
+
+<div class="card" style="margin-bottom:14px">
+  <h2>配置体检</h2>
+  <div id="doctor" class="dim">点下面的按钮检测一下</div>
+  <div class="row" style="margin-top:8px"><button class="primary" onclick="runDoctor()">重新检测</button></div>
+</div>
+
+<div id="personModal" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.66);z-index:50">
+  <div style="max-width:760px;margin:50px auto;background:var(--card);border:1px solid var(--line);
+              border-radius:12px;padding:20px;max-height:82vh;overflow:auto">
+    <div class="row" style="margin-bottom:12px">
+      <h2 id="pmName" style="margin:0;font-size:16px;color:var(--fg)"></h2>
+      <span class="spacer"></span>
+      <button onclick="closePerson()">关闭</button>
+    </div>
+    <div id="pmMeta" class="dim" style="margin-bottom:12px"></div>
+    <div id="pmFacts"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const $ = id => document.getElementById(id);
+const esc = s => (s ?? "").toString().replace(/[&<>"]/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+
+let THRESH_META = {}, SWITCH_META = {}, ready = false;
+
+function toast(msg, bad) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.className = "toast show" + (bad ? " err" : "");
+  setTimeout(() => t.className = "toast", 1800);
+}
+
+async function api(path, body) {
+  const opt = body ? {method:"POST", headers:{"Content-Type":"application/json"},
+                      body: JSON.stringify(body)} : {};
+  const r = await fetch(path, opt);
+  return r.json();
+}
+
+// ---------- 渲染 ----------
+function renderThr(cfg) {
+  const th = cfg.thresholds || {};
+  const box = $("thresholds");
+  if (ready) { // 只更新数值，别打断拖动
+    Object.keys(THRESH_META).forEach(k => {
+      const v = th[k];
+      const el = document.getElementById("thr_" + k);
+      const label = document.getElementById("thrv_" + k);
+      if (el && document.activeElement !== el) el.value = v;
+      if (label) label.textContent = v + (THRESH_META[k].unit ? " " + THRESH_META[k].unit : "");
+    });
+    Object.keys(SWITCH_META).forEach(k => {
+      const el = document.getElementById("sw_" + k);
+      if (el && document.activeElement !== el) el.checked = !!(cfg.switches||{})[k];
+    });
+    return;
+  }
+  let html = "";
+  for (const [k, m] of Object.entries(THRESH_META)) {
+    html += `<div class="thr">
+      <div class="top"><span class="name">${esc(m.label)}</span>
+        <span class="val" id="thrv_${k}">${esc(th[k])} ${esc(m.unit)}</span></div>
+      <input type="range" id="thr_${k}" min="${m.min}" max="${m.max}" step="${m.step}"
+             value="${th[k]}" oninput="thrInput('${k}')">
+    </div>`;
+  }
+  box.innerHTML = html;
+
+  let sw = "";
+  for (const [k, label] of Object.entries(SWITCH_META)) {
+    sw += `<div class="sw"><span>${esc(label)}</span>
+      <label class="toggle"><input type="checkbox" id="sw_${k}"
+        ${(cfg.switches||{})[k] ? "checked" : ""} onchange="swChange('${k}')">
+      <span class="slider"></span></label></div>`;
+  }
+  $("switches").innerHTML = sw;
+}
+
+function thrInput(k) {
+  const el = document.getElementById("thr_" + k);
+  const m = THRESH_META[k];
+  document.getElementById("thrv_" + k).textContent = el.value + (m.unit ? " " + m.unit : "");
+  clearTimeout(window._tt);
+  window._tt = setTimeout(() => {
+    api("/api/config", {thresholds: {[k]: parseFloat(el.value)}})
+      .then(r => toast(r.ok ? "已保存 " + m.label : "保存失败"));
+  }, 400);
+}
+
+function swChange(k) {
+  const on = document.getElementById("sw_" + k).checked;
+  api("/api/config", {switches: {[k]: on}})
+    .then(r => toast(r.ok ? (SWITCH_META[k] + (on ? " 开" : " 关")) : "保存失败"));
+}
+
+function render(d) {
+  if (d.error) { $("clock").textContent = "读取失败：" + d.error; return; }
+  window.state = d;
+  $("ver").textContent = "v" + (d.version || "?");
+  $("clock").textContent = d.now + " · 每 3 秒刷新";
+
+  const sel = $("profileSel");
+  if (d.profiles && sel.options.length !== d.profiles.length) {
+    sel.innerHTML = d.profiles.map(n =>
+      `<option value="${esc(n)}">${esc(n)}</option>`).join("");
+  }
+  if (d.profile && d.profile.name) sel.value = d.profile.name;
+  $("identity").textContent = d.identity || "（还没写）";
+
+  const s = $("sleepState");
+  s.textContent = d.asleep ? ("睡着，" + d.wake_at + " 醒") : "醒着";
+  s.className = "pill" + (d.asleep ? "" : " awake");
+
+  const f = $("focusState");
+  if (d.focusing) {
+    f.style.display = "";
+    f.className = "pill focus";
+    f.textContent = "思考中：" + d.focus_topic + "（剩 " + Math.round(d.focus_left/60) + " 分钟）";
+  } else f.style.display = "none";
+
+  $("vitals").innerHTML = "心情 <b>" + esc(d.mood) + "</b>　精力 <b>" +
+    d.energy.toFixed(2) + "</b>　活了 <b>" + esc(d.age) + "</b> 天";
+
+  $("counts").innerHTML = Object.entries(d.counts).map(([k, v]) =>
+    `<div class="stat"><b>${v}</b><span>${esc(k)}</span></div>`).join("");
+
+  $("rels").innerHTML = (d.relations || []).map(x => {
+    const cls = x.affinity > 0 ? "pos" : x.affinity < 0 ? "neg" : "";
+    return `<tr onclick="openPerson('${esc(x.name)}')" style="cursor:pointer">
+      <td>${esc(x.name)} <span class="dim">›</span></td>
+      <td class="num ${cls}">${(x.affinity >= 0 ? "+" : "") + x.affinity.toFixed(1)}</td>
+      <td>${esc(x.label || "")}</td>
+      <td class="num dim">${x.familiarity.toFixed(2)}</td></tr>`;
+  }).join("") || `<tr><td colspan="4" class="dim">还没有</td></tr>`;
+
+  $("thoughts").innerHTML = (d.thoughts || []).map(t =>
+    `<tr><td class="dim">${esc((t.ts||"").slice(11,16))}</td><td>${
+      esc((t.content||"").slice(0,46))}</td><td class="num">${
+      (t.urge||0).toFixed(2)}</td></tr>`).join("")
+    || `<tr><td colspan="3" class="dim">还没有念头</td></tr>`;
+
+  $("loops").innerHTML = (d.loops || []).map(l =>
+    `<li>#${l.id} ${esc(l.text)} <span class="dim">(${l.strength.toFixed(1)})</span></li>`).join("")
+    || `<li class="dim">没有悬着的事</li>`;
+
+  if (!document.activeElement || document.activeElement.tagName !== "TEXTAREA") {
+    if (d.identity !== undefined) $("identityText").value = d.identity;
+    if (d.memory !== undefined) $("memoryText").value = d.memory;
+  }
+
+  if (d.config) {
+    if (!ready) { THRESH_META = window._thrMeta; SWITCH_META = window._swMeta; }
+    renderThr(d.config);
+    renderChannels(d);
+    const fg = (d.config.thresholds || {}).focus_gap;
+    if (fg !== undefined) $("focusGapHint").textContent = fg;
+    const api = d.config.api || {};
+    if (document.activeElement !== $("apiKey")) {
+      $("apiBase").value = api.base_url || "";
+      // 密钥不回传浏览器：输入框留空，只提示"已配置（尾 4 位）"
+      $("apiKey").value = "";
+      $("apiKey").placeholder = api.api_key_set
+        ? "已配置（尾 " + (api.api_key_tail || "****") + "），要改就整条重填"
+        : "没配，填一条 api key";
+      $("apiModel").value = api.model || "";
+    }
+    const bili = (d.profile && d.profile.bilibili) || d.config.bilibili || {};
+    if (document.activeElement !== $("biliCookie")) {
+      $("biliCookie").value = "";
+      $("biliCookie").placeholder = bili.cookie_set
+        ? "已配置（尾 " + (bili.cookie_tail || "****") + "），要改就整条重填"
+        : "没配，粘贴一条 cookie";
+    }
+  }
+
+  // 运行状态 + 锁定
+  const here = !!d.running_here;
+  const others = d.running_other || [];
+  const rs = $("runState");
+  rs.textContent = here ? "运行中" : "已停止";
+  rs.className = "pill" + (here ? " awake" : "");
+  $("btnStart").disabled = here;
+  $("btnStop").disabled = !here;
+
+  const tip = $("lockTip");
+  if (here) {
+    tip.style.display = "";
+    tip.textContent = "「" + (d.viewing || "") + "」正在运行 —— 阈值、开关、人设、记忆都锁住了，先点「关闭」再改。";
+  } else if (others.length) {
+    tip.style.display = "";
+    tip.textContent = others.join("、") + " 还在运行哦 —— 要启动「" + (d.viewing || "") + "」得先把它关掉。";
+  } else {
+    tip.style.display = "none";
+  }
+  document.querySelectorAll(
+    "#thresholds input, #switches input, #identityText, #memoryText, #apiBase, #apiKey, #apiModel, #biliCookie, #btnSaveMem, #btnSaveIdent"
+  ).forEach(el => { if (el) el.disabled = here; });
+
+  ready = true;
+}
+
+async function tick() {
+  try { render(await api("/api/state")); }
+  catch (e) { $("clock").textContent = "连不上面板服务…"; }
+}
+
+async function startFocus() {
+  const minutes = parseInt($("focusMin").value || "10", 10);
+  const topic = $("focusTopic").value.trim();
+  const r = await api("/api/focus", {minutes, topic});
+  toast(r.ok ? ("思考模式 " + r.minutes + " 分钟") : ("失败：" + r.error), !r.ok);
+  tick();
+}
+async function stopFocus() {
+  const r = await api("/api/focus", {minutes: 0});
+  toast(r.ok ? "已关闭" : "失败", !r.ok);
+  tick();
+}
+async function saveIdentity() {
+  const r = await api("/api/identity", {text: $("identityText").value});
+  toast(r.ok ? "人设已保存" : ("失败：" + r.error), !r.ok);
+}
+async function saveMemory() {
+  const r = await api("/api/memory", {text: $("memoryText").value});
+  toast(r.ok ? "记忆已保存" : "失败", !r.ok);
+}
+
+async function switchProfile(name) {
+  const r = await api("/api/profile", {name});
+  if (!r.ok) { toast(r.error, true); return; }
+  toast("正在查看「" + name + "」");
+  tick();
+}
+
+async function runRole(action) {
+  const r = await api("/api/run", {action});
+  toast(r.ok ? (r.msg || "已执行") : (r.error || "失败"), !r.ok);
+  setTimeout(tick, 1200);
+}
+
+async function openPerson(name) {
+  const r = await api("/api/person", {name});
+  if (!r.ok) { toast(r.error || "读取失败", true); return; }
+  $("pmName").textContent = name;
+  const rel = r.relation || {};
+  $("pmMeta").innerHTML = (rel.affinity !== undefined && rel.affinity !== null)
+    ? ("好感 " + rel.affinity.toFixed(1) + " · 熟悉 " + (rel.familiarity || 0).toFixed(2) +
+       " · " + (rel.label || ""))
+    : "";
+  $("pmFacts").innerHTML = (r.facts || []).map(f => `
+    <div style="border-bottom:1px solid var(--line);padding:9px 0">
+      <div class="dim">#${f.id} · ${esc(f.predicate || "")} · ${esc((f.created_at||"").slice(0,10))}</div>
+      <div class="row" style="margin-top:5px">
+        <input type="text" id="fact_${f.id}" value="${esc(f.object_text)}" style="flex:1;min-width:200px">
+        <button onclick="saveFact(${f.id})">保存</button>
+        <button class="danger" onclick="delFact(${f.id})">删除</button>
+      </div>
+    </div>`).join("") || '<div class="dim">还没有关于这个人的事实</div>';
+  $("personModal").style.display = "";
+}
+
+function closePerson() { $("personModal").style.display = "none"; }
+
+async function saveFact(id) {
+  const text = document.getElementById("fact_" + id).value;
+  const r = await api("/api/fact", {id, text});
+  toast(r.ok ? "已保存" : (r.error || "失败"), !r.ok);
+}
+
+async function delFact(id) {
+  if (!confirm("删掉这条记忆？她以后就想不起来了")) return;
+  const r = await api("/api/fact", {id, delete: true});
+  toast(r.ok ? "已删除" : (r.error || "失败"), !r.ok);
+  if (r.ok) openPerson($("pmName").textContent);
+}
+
+async function saveApi() {
+  const payload = {
+    base_url: $("apiBase").value.trim(),
+    model: $("apiModel").value.trim(),
+  };
+  const typed = $("apiKey").value.trim();
+  if (typed) payload.api_key = typed;   // 空 = 不改，别把已配置的 key 清掉
+  const r = await api("/api/config", {api: payload});
+  toast(r.ok ? "已保存" : (r.error || "保存失败"), !r.ok);
+  if (r.ok) $("apiKey").value = "";
+}
+
+async function saveBili() {
+  const v = $("biliCookie").value.trim();
+  if (!v) { toast("没填新 cookie —— 空值不会覆盖已有的", true); return; }
+  const r = await api("/api/config", {bilibili: {cookie: v}});
+  toast(r.ok ? "B 站 Cookie 已保存" : (r.error || "保存失败"), !r.ok);
+  if (r.ok) $("biliCookie").value = "";
+}
+
+async function runMemory() {
+  const who = $("memWho").value;
+  if (!who) { toast("先选一个人", true); return; }
+  const rounds = parseInt($("memBatch").value || "8", 10);
+  const r = await api("/api/tutorial", {kind: "memory", who, rounds});
+  if (!r.ok) { toast(r.error, true); return; }
+  toast("开始整理「" + who + "」");
+  const pre = $("tutLog");
+  pre.style.display = "";
+  pre.textContent = "启动中…";
+  pollTutorial("memory", 0);
+}
+
+let MEM_PEOPLE = {};
+
+async function loadPeople() {
+  const r = await api("/api/memory/people", {});
+  if (!r.ok) return;
+  const sel = $("memWho");
+  const cur = sel.value;
+  MEM_PEOPLE = {};
+  let html = "";
+  if ((r.recent || []).length) {
+    html += `<optgroup label="最近有往来">` + (r.recent || []).map(p => {
+      MEM_PEOPLE[p.name] = p;
+      return `<option value="${esc(p.name)}">${esc(p.name)}（${p.n} 条）</option>`;
+    }).join("") + `</optgroup>`;
+  }
+  if ((r.older || []).length) {
+    html += `<optgroup label="更早认识（${r.older_n} 人）">` + (r.older || []).map(p => {
+      MEM_PEOPLE[p.name] = p;
+      return `<option value="${esc(p.name)}">${esc(p.name)}（${p.n} 条）</option>`;
+    }).join("") + `</optgroup>`;
+  }
+  sel.innerHTML = html;
+  if (cur && MEM_PEOPLE[cur]) sel.value = cur;
+  updateCats();
+}
+
+function updateCats() {
+  const who = $("memWho").value;
+  const p = MEM_PEOPLE[who];
+  const box = $("memCats");
+  if (!p) { box.textContent = ""; return; }
+  const cats = (p.cats || []).map(c => `${c.k} ${c.n}`).join(" · ");
+  box.textContent = cats ? `共 ${p.n} 条：${cats}` : `共 ${p.n} 条`;
+}
+
+// ---------- 体检 ----------
+async function runDoctor() {
+  $("doctor").innerHTML = '<span class="dim">检测中…</span>';
+  const r = await api("/api/doctor", {});
+  if (!r.ok) { $("doctor").innerHTML = '<span class="dim">检测失败：' + esc(r.error) + '</span>'; return; }
+  const icon = {ok: "✓", warn: "!", error: "✗"};
+  const color = {ok: "#3fb950", warn: "#d29922", error: "#f85149"};
+  $("doctor").innerHTML = (r.items || []).map(it => `
+    <div style="border-bottom:1px solid #1b2129;padding:7px 0">
+      <span style="color:${color[it.level]};font-weight:600">${icon[it.level]}</span>
+      <b style="margin-left:6px">${esc(it.name)}</b>
+      <span class="dim" style="margin-left:8px">${esc(it.detail)}</span>
+      ${it.hint ? `<div class="dim" style="margin-left:20px">→ ${esc(it.hint)}</div>` : ""}
+    </div>`).join("") +
+    `<div style="margin-top:10px;color:${r.errors ? "#f85149" : r.warns ? "#d29922" : "#3fb950"}">
+       ${esc(r.summary)}
+     </div>`;
+}
+
+// ---------- 渠道 ----------
+function renderChannels(d) {
+  const chs = (d.config && d.config.channels) || {};
+  const local = (d.edition || "local") === "local";
+  const locked = !!d.running_here;
+  $("channels").innerHTML = Object.entries(chs).map(([name, c]) => {
+    const dis = "";   // 渠道是启动参数，运行中也能改（重启后生效）
+    // QQ 不再硬禁用；本机没跑框架时只是提醒
+    const hint = (local && name === "qq" && !c.enabled)
+      ? '<span class="pill" style="color:#d29922;background:#241f12">需要先跑 NapCat / go-cqhttp</span>'
+      : "";
+    const urlField = c.kind === "wechat_hook"
+      ? `<input type="text" id="ch_${name}_url" value="${esc(c.hook_url||"")}" placeholder="hook 地址（如 http://127.0.0.1:30001）" style="flex:1;min-width:220px" ${dis}>`
+      : `<input type="text" id="ch_${name}_url" value="${esc(c.base_url||"")}" placeholder="接口地址（如 http://127.0.0.1:5700）" style="flex:1;min-width:220px" ${dis}>`;
+    return `
+      <div class="sw" style="flex-wrap:wrap">
+        <span><b>${esc(c.label||name)}</b></span>
+        <span class="dim" style="flex:1">${esc(c.note||"")}</span>
+        ${hint}
+        ${c.enabled ? '<span class="pill awake">已启用</span>' : ''}
+        <label class="toggle"><input type="checkbox" id="ch_${name}_on"
+          ${c.enabled ? "checked" : ""} ${dis} onchange="chToggle('${name}')">
+          <span class="slider"></span></label>
+      </div>
+      <div class="row" style="margin:0 0 12px 0;gap:6px">
+        ${urlField}
+        <input type="text" id="ch_${name}_token" value="${esc(c.token||"")}"
+               placeholder="token（可选）" style="width:170px" ${dis}>
+        <button onclick="saveChannel('${name}')" ${dis}>保存</button>
+        ${["wechat","qq","other"].includes(name) ? "" :
+          `<button class="danger" onclick="delChannel('${name}')">删除</button>`}
+      </div>`;
+  }).join("");
+}
+
+async function chToggle(name) {
+  const on = document.getElementById("ch_" + name + "_on").checked;
+  const r = await api("/api/config", {channels: {[name]: {enabled: on}}});
+  toast(r.ok ? (name + (on ? " 已启用" : " 已关闭")) : (r.error || "失败"), !r.ok);
+  tick();
+}
+
+async function saveChannel(name) {
+  const c = (state.config.channels || {})[name] || {};
+  const patch = {enabled: document.getElementById("ch_" + name + "_on").checked};
+  const url = document.getElementById("ch_" + name + "_url");
+  const tok = document.getElementById("ch_" + name + "_token");
+  if (c.kind === "wechat_hook") patch.hook_url = url.value.trim();
+  else patch.base_url = url.value.trim();
+  patch.token = tok ? tok.value.trim() : "";
+  const r = await api("/api/config", {channels: {[name]: patch}});
+  toast(r.ok ? (name + " 已保存") : (r.error || "保存失败"), !r.ok);
+}
+
+async function addChannel() {
+  const name = $("chNewName").value.trim();
+  if (!name) { toast("先起个名字", true); return; }
+  const r = await api("/api/channel/new", {
+    name,
+    kind: $("chNewKind").value,
+    base_url: $("chNewUrl").value.trim(),
+    prefix: $("chNewPrefix").value.trim(),
+    enabled: true,
+  });
+  if (!r.ok) { toast(r.error, true); return; }
+  toast("已添加渠道 " + name);
+  $("chNewName").value = ""; $("chNewUrl").value = ""; $("chNewPrefix").value = "";
+  tick();
+}
+
+async function delChannel(name) {
+  if (!confirm("删除渠道「" + name + "」？")) return;
+  const r = await api("/api/channel/del", {name});
+  toast(r.ok ? "已删除" : (r.error || "失败"), !r.ok);
+  tick();
+}
+
+function toggleTut(on) {
+  $("tutorial").style.display = on ? "" : "none";
+}
+
+// ---------- 教程轮 ----------
+async function runTutorial(kind) {
+  const rounds = parseInt($("tutRounds").value || "1", 10);
+  const r = await api("/api/tutorial", {kind, rounds});
+  if (!r.ok) { toast(r.error, true); return; }
+  toast(r.title + " 已开始（后台跑）");
+  const pre = $("tutLog");
+  pre.style.display = "";
+  pre.textContent = "启动中…";
+  pollTutorial(kind, 0);
+}
+
+function pollTutorial(kind, n) {
+  if (n > 60) return;
+  setTimeout(async () => {
+    const r = await api("/api/tutorial/log", {kind});
+    const pre = $("tutLog");
+    if (r.ok) {
+      pre.textContent = r.text || "（还没有输出）";
+      pre.scrollTop = pre.scrollHeight;
+    }
+    if (r.ok && r.text && /完成|结束|失败|traceback|error/i.test(r.text.slice(-400))) return;
+    pollTutorial(kind, n + 1);
+  }, 2000);
+}
+
+async function newProfile() {
+  const name = prompt("新角色叫什么？");
+  if (!name) return;
+  const r = await api("/api/profile/new", {name});
+  if (!r.ok) { toast(r.error, true); return; }
+  toast("已创建「" + name + "」，人设可在下面编辑");
+  setTimeout(() => location.reload(), 900);
+}
+
+async function ctrl(action) {
+  if (action === "restart") {
+    const r = await api("/api/control", {action: "stop"});
+    await new Promise(x => setTimeout(x, 1200));
+    const r2 = await api("/api/control", {action: "start"});
+    toast("重启中…");
+    return;
+  }
+  const r = await api("/api/control", {action});
+  toast(r.msg || r.error || "已执行", !r.ok);
+}
+
+// 阈值/开关元数据以 /api/state.meta 为准，本地表只作兜底。
+// 以前这里抄了一份后端表，结果 ability_tutorial 后端有、前端没有 → 开关渲染不出来。
+(async function init() {
+  let meta = null;
+  try {
+    const r = await api("/api/state");
+    meta = (r && r.meta) || null;
+  } catch (e) { /* 后端没给就用兜底表 */ }
+
+  window._thrMeta = {
+    idle_think_gap:{label:"空闲时多久想一次",unit:"秒",min:10,max:3600,step:5},
+    focus_gap:{label:"思考时刻里的间隔",unit:"秒",min:5,max:600,step:5},
+    min_think_gap:{label:"两次想的最短间隔",unit:"秒",min:5,max:600,step:5},
+    speak_gap:{label:"说完话后静默多久",unit:"秒",min:0,max:600,step:5},
+    browse_gap:{label:"两次刷 B 站的最短间隔",unit:"秒",min:60,max:86400,step:60},
+    urge_floor:{label:"低于这个劲头就不做",unit:"",min:0,max:1,step:0.05},
+    score_band:{label:"冲动与犹豫相近时掷骰子的带宽",unit:"",min:0,max:0.5,step:0.01},
+    facts_here:{label:"每轮带出几条记忆",unit:"条",min:0,max:20,step:1},
+    keep_loops:{label:"最多保留几件悬着的事",unit:"条",min:3,max:80,step:1},
+    focus_max_minutes:{label:"思考模式最长",unit:"分钟",min:1,max:120,step:1},
+  };
+  window._swMeta = {
+    browse_bili:"自己去看 B 站", publish_bili:"发到 B 站",
+    focus_mode:"主动开思考模式", auto_sleep:"会困会自己睡", share:"会忍不住分享",
+    judge_relations:"会自己给人打好感分", ability_tutorial:"给她能力教程",
+  };
+
+  if (meta && Array.isArray(meta.thresholds) && meta.thresholds.length) {
+    window._thrMeta = {};
+    meta.thresholds.forEach(t => {
+      window._thrMeta[t.key] = {label: t.label, unit: t.unit || "",
+                                min: t.min, max: t.max, step: t.step};
+    });
+  }
+  if (meta && Array.isArray(meta.switches) && meta.switches.length) {
+    window._swMeta = {};
+    meta.switches.forEach(s => { window._swMeta[s.key] = s.label; });
+  }
+
+  THRESH_META = window._thrMeta; SWITCH_META = window._swMeta;
+  tick(); setInterval(tick, 3000);
+  loadPeople();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,102 @@
+{
+  "_note": [
+    "这是示例骨架：首次运行前整份复制成 config.json（已存在则不会被覆盖）。",
+    "更省事的做法：跑 python tools/init_persona.py，它会问几个问题并生成 config.json。",
+    "凭据不放这里：B 站 cookie 放 data/secrets/，微信/QQ 账号 id 放 data/identity.json。",
+    "阈值三层：此处顶层 thresholds 是全局默认，profiles.<角色>.thresholds 可逐角色覆盖，",
+    "最后才是 core/config.py 的 DEFAULTS（代码是唯一真相源，本文件字段应与它对齐）。",
+    "改完不用重启：面板保存后下一拍就生效（core/config.py 每次读文件的 mtime）。"
+  ],
+  "version": "1.0.0",
+  "edition": "open",
+  "active": "阿鱼",
+  "viewing": "阿鱼",
+  "profiles": {
+    "阿鱼": {
+      "dir": "data",
+      "memory": "记忆",
+      "persona": "我是谁.md",
+      "bilibili": {
+        "cookie": ""
+      },
+      "channels": [
+        "qq"
+      ],
+      "thresholds": {}
+    }
+  },
+  "thresholds": {
+    "idle_think_gap": 60,
+    "focus_gap": 20,
+    "min_think_gap": 20,
+    "speak_gap": 0,
+    "browse_gap": 3600,
+    "search_gap": 600,
+    "urge_floor": 0.2,
+    "score_band": 0.15,
+    "quiet_hours": [2, 3, 4, 5, 6],
+    "sleep_hours": [0, 1, 2, 3, 4],
+    "max_sleep_hours": 10,
+    "decay_days": 30,
+    "keep_loops": 20,
+    "facts_here": 8,
+    "focus_max_minutes": 60,
+    "always_reply": false,
+    "recall_limit": 12,
+    "facts_per_person": 15,
+    "events_per_person": 6
+  },
+  "switches": {
+    "browse_bili": true,
+    "publish_bili": false,
+    "focus_mode": true,
+    "auto_sleep": true,
+    "share": true,
+    "judge_relations": true,
+    "ability_tutorial": true
+  },
+  "api": {
+    "base_url": "",
+    "api_key": "",
+    "model": ""
+  },
+  "identity": {
+    "self_wxid": "",
+    "owner_wxid": "",
+    "names": ["阿鱼"]
+  },
+  "bilibili": {
+    "cookie": ""
+  },
+  "publish": {
+    "biliup": ""
+  },
+  "channels": {
+    "wechat": {
+      "kind": "wechat_hook",
+      "enabled": false,
+      "label": "微信",
+      "hook_url": "http://127.0.0.1:30001",
+      "prefixes": ["wxid_", "@chatroom", "filehelper"],
+      "note": "需要本机的 WeChat-Hook（Windows + 指定微信版本），本项目不附带；没有就把 enabled 设 false"
+    },
+    "qq": {
+      "kind": "onebot",
+      "enabled": true,
+      "label": "QQ",
+      "base_url": "http://127.0.0.1:5700",
+      "token": "",
+      "prefixes": ["qq_"],
+      "note": "OneBot 11 协议，先跑 NapCat / Lagrange / go-cqhttp，再把地址和 token 填这里"
+    },
+    "other": {
+      "kind": "http",
+      "enabled": false,
+      "label": "其他",
+      "base_url": "",
+      "token": "",
+      "prefixes": ["http_"],
+      "note": "任意 HTTP 端点：出站 POST /send，入站自己把消息 POST 到 8771/cb（示例见 docs/channels.md）"
+    }
+  }
+}

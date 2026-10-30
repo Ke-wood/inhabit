@@ -1,0 +1,49 @@
+# ---- 运行时数据：她的记忆、关系、聊天记录、日志，全部不进版本库 ----
+data/
+*.db
+*.db-wal
+*.db-shm
+data/secrets/
+cookies.json
+
+# ---- 本机配置：含角色名、渠道地址，首次运行从 config.example.json 复制 ----
+config.json
+.env
+
+# ---- 记忆库：默认目录 `记忆/`，里面是她和具体人的关系，属于使用者私有 ----
+记忆/
+记忆.bak-*/
+memory_vault/
+
+# ---- 人格卡候选修订（运行时产物，见 persona/candidates.md） ----
+persona/candidates.md
+
+# ---- 可选：自备的 Live2D 模型与参考音，版权归各自作者 ----
+assets/live2d/
+assets/voice/
+
+# ---- 第三方二进制（biliup 发 B 站投稿用，首次运行脚本下载） ----
+tools/bin/
+*.exe
+*.dll
+
+# ---- 头像/预览等本机产物 ----
+assets/preview/
+*.lnk
+_last_run.txt
+.tmp_say/
+
+# ---- Python ----
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+venv/
+.pytest_cache/
+
+# ---- 编辑器 / 系统 ----
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+desktop.ini
