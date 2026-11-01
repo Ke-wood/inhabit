@@ -321,6 +321,22 @@ def test_broken_pipe_safe():
     assert "OSError" in src, "_p 要吞掉 OSError"
 
 
+def test_pick_release_returns():
+    """latest_release 拿到结果必须 return，不能掉到 main 分支。"""
+    src = (ROOT / "tools" / "update.py").read_text(encoding="utf-8")
+    i = src.index("def latest_release")
+    body = src[i:src.index("class UpdateError")]
+    assert "return _pick_release" in body, (
+        "latest_release 里 _pick_release 的结果没有 return，会永远退到 main 分支")
+
+
+def test_release_list_beats_latest_cache():
+    """优先用列表接口，避免 /releases/latest 的 CDN 缓存。"""
+    src = (ROOT / "tools" / "update.py").read_text(encoding="utf-8")
+    assert "API_LIST" in src, "没有用 releases 列表接口"
+    assert "_pick_release" in src
+
+
 def main() -> int:
     print("更新模块")
     for name, fn in [
@@ -340,6 +356,8 @@ def main() -> int:
         ("版本以 VERSION 为准", test_version_from_file_not_config),
         ("旧版本号在覆盖前记录", test_from_version_captured_before_overwrite),
         ("管道断开不崩", test_broken_pipe_safe),
+        ("release 结果要 return", test_pick_release_returns),
+        ("列表优先于 latest", test_release_list_beats_latest_cache),
     ]:
         check(name, fn)
     print(f"\n{ok} 通过 / {fail} 失败")

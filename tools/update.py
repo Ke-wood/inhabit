@@ -38,6 +38,7 @@ from core import version as V
 
 DEFAULT_REPO = "Ke-wood/inhabit"
 API = "https://api.github.com/repos/{repo}/releases/latest"
+API_LIST = "https://api.github.com/repos/{repo}/releases?per_page=10"
 TARBALL = "https://codeload.github.com/{repo}/tar.gz/refs/heads/main"
 TARBALL_TAG = "https://codeload.github.com/{repo}/tar.gz/refs/tags/{tag}"
 
@@ -81,6 +82,47 @@ def _token_from_config() -> str:
         return ""
 
 
+def _pick_release(repo: str) -> dict:
+    """取最新 release。
+
+    不用 /releases/latest：它有 CDN 缓存，刚发的版本可能还没生效
+    （实测过：v1.4.2 发出来了，latest 还指着 v1.4.1）。
+    改用列表接口，按语义版本挑最新的，比「按发布顺序」更可靠。
+    """
+    try:
+        rows = json.loads(_get(API_LIST.format(repo=repo)))
+    except urllib.error.HTTPError:
+        rows = None
+    if isinstance(rows, list) and rows:
+        cands = [r for r in rows
+                 if isinstance(r, dict) and not r.get("draft") and r.get("tag_name")]
+        if cands:
+            best = max(cands, key=lambda r: V.parse(str(r.get("tag_name") or "").lstrip("vV")))
+            tag = str(best.get("tag_name") or "").strip()
+            return {
+                "version": tag.lstrip("vV"),
+                "tag": tag,
+                "notes": str(best.get("body") or ""),
+                "url": TARBALL_TAG.format(repo=repo, tag=tag),
+                "source": "release",
+                "published": str(best.get("published_at") or ""),
+            }
+        # 列表成功但全是草稿/预发布 → 当作「没有正式 release」
+        raise LookupError("没有可用的 release")
+
+    # 列表接口不可用（老版本 API 或权限）→ 退回 /releases/latest
+    d = json.loads(_get(API.format(repo=repo)))
+    tag = str(d.get("tag_name") or "").strip()
+    return {
+        "version": tag.lstrip("vV") or V.read_version(),
+        "tag": tag,
+        "notes": str(d.get("body") or ""),
+        "url": TARBALL_TAG.format(repo=repo, tag=tag),
+        "source": "release",
+        "published": str(d.get("published_at") or ""),
+    }
+
+
 def latest_release() -> dict | None:
     """查最新 release。
 
@@ -90,17 +132,9 @@ def latest_release() -> dict | None:
     """
     repo = repo_slug()
     try:
-        d = json.loads(_get(API.format(repo=repo)))
-        tag = str(d.get("tag_name") or "").strip()
-        ver = tag.lstrip("vV") or V.read_version()
-        return {
-            "version": ver,
-            "tag": tag,
-            "notes": str(d.get("body") or ""),
-            "url": TARBALL_TAG.format(repo=repo, tag=tag),
-            "source": "release",
-            "published": str(d.get("published_at") or ""),
-        }
+        return _pick_release(repo)
+    except LookupError:
+        pass
     except urllib.error.HTTPError as e:
         if e.code != 404:
             # 401/403（限流或无权限）/500：网络层问题，不是「没有 release」
