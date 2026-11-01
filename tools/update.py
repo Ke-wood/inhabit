@@ -399,7 +399,10 @@ def cmd_update(dry: bool = False) -> int:
         if r.get("dry"):
             print("（dry-run，没有真的改文件）")
             return 0
-        print(_color(f"更新完成：{r['from']} → {r['to']}，改了 {r['updated']} 个文件", "32"))
+        # 用下载前读到的 local 作「从哪个版本来的」，别信 apply() 的返回值：
+        # 升级时跑的是「旧版 apply」，它的 old 可能已经被覆盖成新值（自举问题）。
+        from_v = local or r.get("from") or "?"
+        print(_color(f"更新完成：{from_v} → {r['to']}，改了 {r['updated']} 个文件", "32"))
         print(f"备份在：{r['backup']}")
         print("重启她才会生效：python tools/ctl.py restart")
     return 0

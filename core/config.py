@@ -16,7 +16,7 @@ CONFIG = ROOT / "config.json"
 
 # 默认值：首次运行或字段缺失时用这些
 DEFAULTS = {
-    "version": "1.4.1",
+    "version": "1.4.2",
     "edition": "open",        # open = 开源版（默认 QQ 通道）；local = 本机自用（微信 hook）
     "active": "阿鱼",          # 正在跑的那个（主循环启动时写）
     "viewing": "阿鱼",         # 面板正在看的那个（可以在跑别的时看另一个）
