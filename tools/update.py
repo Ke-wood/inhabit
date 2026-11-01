@@ -416,6 +416,9 @@ def cmd_rollback() -> int:
 
 def main(argv: list[str] | None = None) -> int:
     argv = argv if argv is not None else sys.argv[1:]
+    # 允许 `update.py --dry` 这种「选项直接跟在后面」的写法
+    if argv and argv[0].startswith("-"):
+        argv = ["update"] + list(argv)
     cmd = argv[0] if argv else "check"
     if cmd == "check":
         return cmd_check()

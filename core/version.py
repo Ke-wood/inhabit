@@ -23,7 +23,11 @@ FALLBACK_VERSION = "0.0.0"
 
 # ------------------------------------------------------------------ 版本号
 def read_version() -> str:
-    """读 VERSION 文件；没有就退回 config 里的值。"""
+    """读 VERSION 文件。
+
+    VERSION 是唯一真相。config 里的 version 只是给面板显示用的旧副本，
+    两者不一致时以 VERSION 为准 —— 否则更新完还显示旧版本号。
+    """
     try:
         v = VERSION_FILE.read_text(encoding="utf-8").strip()
         if v:
@@ -35,6 +39,18 @@ def read_version() -> str:
         return str((config.load() or {}).get("version") or FALLBACK_VERSION)
     except Exception:
         return FALLBACK_VERSION
+
+
+def sync_config_version() -> None:
+    """把 VERSION 写回 config.json，让面板显示的版本一致。"""
+    try:
+        from core import config
+        v = read_version()
+        cur = (config.load() or {}).get("version")
+        if cur != v:
+            config.set_value("version", value=v)
+    except Exception:
+        pass
 
 
 _VERSION_RE = re.compile(r"v?(\d+)(?:\.(\d+))?(?:\.(\d+))?(?:[-.+]?([0-9A-Za-z.\-]+))?")

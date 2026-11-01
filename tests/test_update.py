@@ -277,6 +277,31 @@ def test_network_error_not_silent():
     raise AssertionError("断网时 latest_release 应抛 UpdateError，而不是返回 main 分支")
 
 
+def test_bare_update_does_update():
+    """`python inhabit.py update` 必须真的更新，不能退化成只检查。"""
+    sys.path.insert(0, str(ROOT))
+    src = (ROOT / "inhabit.py").read_text(encoding="utf-8")
+    # 找到 update 的映射，确认它补上了 "update" 子命令
+    line = [l for l in src.splitlines() if '"update":' in l]
+    assert line, "inhabit.py 里没有 update 命令"
+    assert '"update"' in line[0], f"裸 update 会退化成 check：{line[0]}"
+
+
+def test_dry_alias():
+    """`update.py --dry` 这种写法要能被识别成 update --dry。"""
+    src = (ROOT / "tools" / "update.py").read_text(encoding="utf-8")
+    assert "argv[0].startswith(\"-\")" in src, "没处理「选项直接跟在后面」的写法"
+
+
+def test_version_from_file_not_config():
+    """VERSION 是唯一真相，不能被 config 里的旧版本号带偏。"""
+    from core import version as V
+    vf = ROOT / "VERSION"
+    assert vf.exists(), "没有 VERSION 文件"
+    got = V.read_version()
+    assert got == vf.read_text(encoding="utf-8").strip().split()[0], got
+
+
 def main() -> int:
     print("更新模块")
     for name, fn in [
@@ -291,6 +316,9 @@ def main() -> int:
         ("回滚能恢复", test_rollback_restores),
         ("断网安静失败", test_no_network_fails_soft),
         ("断网不假装正常", test_network_error_not_silent),
+        ("裸 update 真的更新", test_bare_update_does_update),
+        ("--dry 别名", test_dry_alias),
+        ("版本以 VERSION 为准", test_version_from_file_not_config),
     ]:
         check(name, fn)
     print(f"\n{ok} 通过 / {fail} 失败")

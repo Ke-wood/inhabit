@@ -168,7 +168,9 @@ COMMANDS = {
     "run": cmd_run,
     "serve": cmd_serve,
     "panel": cmd_panel,
-    "update": lambda a: cmd_update(a),
+    # 裸 `inhabit.py update` 要真的更新，不能只检查
+    "update": lambda a: cmd_update(["update"] + list(a)),
+    "check": lambda a: cmd_update(["check"] + list(a)),
     "rollback": lambda a: cmd_update(["rollback"]),
     "version": lambda a: cmd_version(),
     "doctor": lambda a: cmd_doctor(),
