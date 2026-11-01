@@ -115,7 +115,7 @@ PLAN_HINT = {
 
 def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
         send: Callable[[str, str], object] | None = None,
-        max_steps: int = 3) -> dict:
+        max_steps: int = 3, address_pe: dict | None = None) -> dict:
     # 她念头里指了对象就发过去；没指就留在眼前
     if getattr(thought, "target", ""):
         rid = _resolve_place(bot, thought.target)
@@ -135,7 +135,7 @@ def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
     sleep_retry = 0
     made = 0
     media_sent = 0
-    prompt = _initial_prompt(bot, thought, scene)
+    prompt = _initial_prompt(bot, thought, scene, address_pe=address_pe)
     system = bot.persona_block() + "\n\n" + ACT_SYSTEM
 
     for _ in range(max(1, max_steps)):
@@ -636,7 +636,20 @@ def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
     return {"spoken": spoken, "trace": trace, "thought": thought.content}
 
 
-def _initial_prompt(bot: Self, thought: Thought, scene: str) -> str:
+def _address_block(pe: dict | None) -> str:
+    """有人叫错名字时，提醒她一句 —— 具体怎么反应由她自己定。"""
+    if not pe:
+        return ""
+    try:
+        from core import address
+        line = address.describe(pe, int(pe.get("count") or 1))
+        return ("\n\n# 有人叫错你名字\n" + line) if line else ""
+    except Exception:
+        return ""
+
+
+def _initial_prompt(bot: Self, thought: Thought, scene: str,
+                    address_pe: dict | None = None) -> str:
     ctx = bot.context(scene)
     hint = PLAN_HINT.get(thought.plan, "")
     pl = bot.places()
@@ -655,7 +668,9 @@ def _initial_prompt(bot: Self, thought: Thought, scene: str) -> str:
         f"# 你能开口的地方\n{_places(bot, scene)}\n\n"
         f"# 你认识的人\n{bot.relations_text() or '（还没有特别熟的）'}\n\n"
         f"# 刚才在说\n" + ("\n".join(ctx["recent"][-8:]) or "（没人说话）")
+        + (f"\n\n# 你答应过、还没做的事\n{ctx['tasks']}" if ctx.get("tasks") else "")
         + (f"\n\n# 你记得的关于他们的事\n{ctx['facts']}" if ctx.get("facts") else "")
+        + _address_block(address_pe)
         + (("\n\n" + _tutorial()) if _tutorial() else "")
         + hint_go
         + _pool_block(bot.con)

@@ -34,6 +34,8 @@
   冲动压过犹豫才开口。所以她会「憋着」。
 - **她能动**。说 / 发图 / 发语音 / 看图 / 去看 B 站 / 上网查 / 记 / 忘 / 改自己的人设 / 睡 / 认真想一会儿 / 关掉悬着的事。
 - **关系会变**。熟悉度只涨不跌，好感可升可降；她自己也能用 `feel` 改。
+- **答应的事当场就记**。任务与「一起经历过什么」说完即入上下文，不等后台整理。
+- **会介意你叫她什么**。禁称写在 `记忆/称呼.md`，被叫错会纠正，次数多了会真生气。
 - **有作息**。会困、会睡、会按自己定的时间醒；深夜不主动打扰。
 - **多角色**。一个 profile = 独立数据库 + 独立记忆目录 + 独立渠道，可以同时跑。
 
@@ -110,6 +112,8 @@ data/            数据库、消息流、日志（运行时生成，不进版本
 | [docs/architecture.md](docs/architecture.md) | 架构：一拍怎么走、上下文预算、为什么这么设计 |
 | [docs/reference.md](docs/reference.md) | 所有阈值、开关、端口、配置项一张表 |
 | [docs/memory.md](docs/memory.md) | 记忆系统：库 ↔ 文件、同步水位、遗忘语义 |
+| [docs/address.md](docs/address.md) | **称呼**：接受哪些叫法、被叫错时怎么反应 |
+| [docs/tasks.md](docs/tasks.md) | **任务与共同经历**：实时写入，不等后台 |
 | [docs/channels.md](docs/channels.md) | 通道接入与消息格式 |
 | [presets/dafeiyu/README.md](presets/dafeiyu/README.md) | **预设：蓝色大肥鱼**（DeepSeek 鲸鱼娘），含出处与边界说明 |
 | [docs/qq.md](docs/qq.md) | **QQ 能力全景**：图片/语音/表情怎么收发，能力探测，来源与致谢 |

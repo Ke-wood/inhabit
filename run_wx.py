@@ -58,6 +58,14 @@ LAST_BROWSE_KEY = "last_browse"
 QUIET_HOURS = range(2, 7)       # 这个点不主动打扰
 
 
+def _who(rec: dict) -> str:
+    """通道上报的名字优先（QQ 有昵称），拿不到才查名字表。"""
+    name = str(rec.get("actor_name") or "").strip()
+    if name:
+        return name
+    return names.label(rec.get("actor_id") or "")
+
+
 def log(msg: str) -> None:
     line = time.strftime("[%H:%M:%S] ") + msg
     try:
@@ -604,10 +612,10 @@ def main() -> None:
                 state["owner_last_text"] = rec["text"]
 
             if sleep.asleep(con, datetime.fromtimestamp(now)):
-                flow.record_only([Msg(rec["actor_id"], names.label(rec["actor_id"]),
+                flow.record_only([Msg(rec["actor_id"], _who(rec),
                                       rec["text"], now)], now)
                 con.commit()
-                log(f"[睡着] {names.label(rec['actor_id'])}：{rec['text'][:30]}（只记下，不回）")
+                log(f"[睡着] {_who(rec)}：{rec['text'][:30]}（只记下，不回）")
                 continue
 
             is_group = bool(rec.get("is_group"))
@@ -616,15 +624,15 @@ def main() -> None:
             directed = (not is_group) or mentioned or in_conv
             mode = "对话" if directed else "群聊"
             try:
-                d = flow.tick([Msg(rec["actor_id"], names.label(rec["actor_id"]),
+                d = flow.tick([Msg(rec["actor_id"], _who(rec),
                                    rec["text"], now)], now, directed=directed)
             except Exception as e:
                 log(f"思考出错：{type(e).__name__}: {e}")
                 continue
 
-            log(f"[{mode}] {names.label(rec['actor_id'])}：{rec['text'][:40]}  "
+            log(f"[{mode}] {_who(rec)}：{rec['text'][:40]}  "
                 f"→ {'说' if d.speak else '不说'}（p={d.prob:.2f}/{d.threshold:.2f}，{d.reason}）")
-            who = names.label(rec["actor_id"])
+            who = _who(rec)
             rel = relations.touch(con, who, replied=d.speak, text=rec["text"])
             if rel and abs(rel.get("delta", 0)) >= 1:
                 log(f"  关系：{who} 好感 {rel['affinity']:+.1f}（{rel['label']}）")

@@ -337,6 +337,16 @@ class Self:
         rows = store.open_thoughts(self.con, limit)
         return "\n".join(f"- {r['content']}（{r['urge']:.1f}）" for r in rows)
 
+    def tasks_text(self, limit: int = 5) -> str:
+        """答应过、还没做的事。和「悬着的疑问」分开。"""
+        from core import tasks as _t
+        return _t.tasks_text(self.con, limit)
+
+    def shared_text(self, who: str = "", limit: int = 6) -> str:
+        """我和某个人一起经历过什么。"""
+        from core import tasks as _t
+        return _t.shared_text(self.con, who or self.bot_name, limit)
+
     def loops_text(self, limit: int = 5) -> str:
         rows = store.loops_with_ids(self.con, limit)
         return "\n".join(f"- #{r['id']} {r['text']}（{r['strength']:.1f}）" for r in rows)
@@ -400,14 +410,16 @@ class Self:
                 who.append(n)
         out: list[str] = []
         # 每类给个配额，别让某一类（比如一堆「上课」）把位置占满
-        QUOTA = (("身份", 3), ("关系", 3), ("喜好", 2),
-                 ("观点", 1), ("共同经历", 1), ("经历", 2))
+        # 共同经历给足位置：它是「我们一起做过什么」，最容易在需要时想不起来
+        QUOTA = (("共同经历", 3), ("身份", 3), ("关系", 3), ("喜好", 2),
+                 ("观点", 1), ("经历", 2))
         for name in who[:3]:
+            # 共同经历单列取（不被别的分类挤掉），其余按新→旧
             rows = self.con.execute(
                 "SELECT f.predicate, f.object_text FROM facts f "
                 "JOIN entities e ON e.id = f.subject_id "
                 "WHERE e.name = ? AND f.disputed = 0 AND f.superseded_by IS NULL "
-                "ORDER BY f.id DESC", (name,)).fetchall()
+                "ORDER BY (f.predicate='共同经历') DESC, f.id DESC", (name,)).fetchall()
             by: dict[str, list[str]] = {}
             for r in rows:
                 by.setdefault(r["predicate"] or "其他", []).append(r["object_text"])
@@ -427,5 +439,6 @@ class Self:
             "facts": self.facts_here(s),
             "thoughts": self.thoughts_text(),
             "loops": self.loops_text(),
+            "tasks": self.tasks_text(),
             "quiet": self.quiet,
         }

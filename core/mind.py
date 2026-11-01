@@ -88,6 +88,7 @@ def think(bot: Self, brain: Brain, *, trigger: str, why: str = "",
         f"# 你同时在的地方\n{'、'.join(everywhere) or '（只有眼前）'}\n\n"
         + (f"# 你按了「认真想一会儿」\n正在想：{bot.focus_topic}\n\n"
            if bot.focusing() else "")
+        + (f"# 你答应过、还没做的事\n{ctx['tasks']}\n" if ctx.get("tasks") else "")
         + f"# 你心里还悬着的事\n{ctx['loops'] or '（没有）'}\n"
         + ("（已经知道答案的就用 resolve 关掉，别一直挂在头顶）\n\n"
            if ctx['loops'] else "\n")

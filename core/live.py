@@ -18,7 +18,7 @@ import time
 from datetime import datetime
 
 from channels import names
-from core import config, sleep
+from core import address, config, sleep, tasks
 from core.act import act
 from core.janitor import Janitor
 from core.loop import Msg
@@ -36,6 +36,17 @@ def _port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.5) -> bool
         return True
     except OSError:
         return False
+
+
+def _recent_address(pending: list[dict], scene: str) -> dict | None:
+    """这个场景最近一条「叫错名字」的记录（只认最近 5 分钟内的）。"""
+    for item in reversed(pending[-10:]):
+        if item.get("scene") != scene:
+            continue
+        pe = item.get("address")
+        if pe:
+            return pe
+    return None
 
 
 def _media_ref(rec: dict) -> list[str]:
@@ -137,17 +148,36 @@ class Live:
                 ts = raw_ts
         except (TypeError, ValueError):
             pass
-        msg = Msg(rec.get("actor_id") or "", names.label(rec.get("actor_id") or ""),
+        # 名字优先用通道上报的（QQ 上报里就有昵称/群名片），
+        # 拿不到才回落到名字表 —— 否则 QQ 消息会全变成「路人XXXX」
+        who = str(rec.get("actor_name") or "").strip()
+        if not who:
+            who = names.label(rec.get("actor_id") or "")
+        msg = Msg(rec.get("actor_id") or "", who,
                   rec["text"], ts, str(rec.get("msgid") or ""))
         self.bot.observe(msg, scene, channel=str(rec.get("channel") or "wechat"))
         # 图片/语音：把本地落盘路径记下来，她后面才能「看」或「听」
         media = _media_ref(rec)
         if media:
             self._attach_media(scene, media)
+        # 任务 / 共同经历：当场就记，不等后台整理
+        try:
+            tasks.capture(self.con, rec["text"],
+                          who=msg.actor_name if msg.actor_name != self.bot.bot_name else "")
+        except Exception:
+            pass
+        # 被叫错名字：记次数，挂在这条消息上，这一拍就让她知道
+        hit = None
+        try:
+            hit = address.detect(rec["text"], bot_names=self.bot.bot_names)
+            if hit:
+                hit["count"] = address.bump_wrong(self.con, hit["hit"])
+        except Exception:
+            hit = None
         self.pending.append({"scene": scene, "who": msg.actor_name,
                              "text": rec["text"], "ts": ts,
                              "is_group": bool(rec.get("is_group")),
-                             "media": media})
+                             "media": media, "address": hit})
         self.last_active = now
         self.stats["fed"] += 1
         self.con.commit()
@@ -313,7 +343,8 @@ class Live:
             self.retry_at = now + 30
             return {"thought": t.content, "spoken": []}
 
-        r = act(self.bot, self.brain, t, scene=scene, send=self._send)
+        r = act(self.bot, self.brain, t, scene=scene, send=self._send,
+                address_pe=_recent_address(self.pending, scene))
         self._close(t, "done")
         if any("看了《" in line for line in r["trace"]):
             self.stats["browsed"] += 1
