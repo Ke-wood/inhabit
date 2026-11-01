@@ -89,6 +89,8 @@ details code{background:#0d1117;padding:1px 6px;border-radius:4px;color:var(--ac
 
 <div class="bar">
   <h1>阿鱼</h1><span class="ver" id="ver"></span>
+  <span class="pill" id="updPill" style="display:none;cursor:pointer"
+        onclick="checkUpdate(true)">有新版</span>
   <span class="dot"></span><span class="dim" id="clock">连接中…</span>
   <span class="spacer"></span>
   <span class="dim">查看</span>
@@ -101,6 +103,7 @@ details code{background:#0d1117;padding:1px 6px;border-radius:4px;color:var(--ac
   <button id="btnStop" onclick="runRole('stop')">关闭</button>
   <button onclick="ctrl('wake')">叫醒</button>
   <button onclick="ctrl('sleep')">让她睡</button>
+  <button onclick="checkUpdate()" title="检查 GitHub 上的新版本">检查更新</button>
 </div>
 <div id="lockTip" class="card" style="margin-bottom:14px;display:none;
      border-color:#5a4a1f;background:#241f12;color:#e3b341;font-size:13px">
@@ -111,6 +114,21 @@ details code{background:#0d1117;padding:1px 6px;border-radius:4px;color:var(--ac
     <h2>她是谁</h2>
     <div class="who" id="identity">—</div>
   </div>
+  <div class="card" id="updCard">
+    <h2>版本与更新</h2>
+    <p class="dim" style="font-size:12px">
+      只替换程序文件；<b>记忆、人设、config、数据库一律不动</b>，更新前会自动备份。
+    </p>
+    <p id="updInfo" class="dim" style="font-size:13px">正在读取…</p>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px">
+      <button onclick="checkUpdate()">检查更新</button>
+      <button class="primary" id="btnDoUpdate" onclick="doUpdate()" style="display:none">立即更新</button>
+      <button onclick="doRollback()" id="btnRollback">回滚</button>
+    </div>
+    <pre id="updLog" class="dim" style="display:none;white-space:pre-wrap;font-size:12px;
+         max-height:180px;overflow:auto;margin-top:8px"></pre>
+  </div>
+
   <div class="card">
     <h2>现在</h2>
     <p><span class="pill" id="sleepState">—</span> <span class="pill" id="focusState" style="display:none"></span></p>
@@ -363,6 +381,19 @@ function render(d) {
   if (d.error) { $("clock").textContent = "读取失败：" + d.error; return; }
   window.state = d;
   $("ver").textContent = "v" + (d.version || "?");
+  const u = d.update_available || {};
+  if (u.newer && u.latest) {
+    const pill = $("updPill");
+    pill.style.display = "";
+    pill.textContent = "新版 " + u.latest;
+  } else {
+    $("updPill").style.display = "none";
+  }
+  $("updInfo").textContent = u.checked_at
+    ? ("当前 v" + (d.version || "?") + " · 上次检查 " + u.checked_at
+       + (u.latest ? (" · 远端 " + u.latest) : ""))
+    : ("当前 v" + (d.version || "?") + " · 还没检查过");
+  $("btnDoUpdate").style.display = u.newer ? "" : "none";
   $("clock").textContent = d.now + " · 每 3 秒刷新";
 
   const sel = $("profileSel");
@@ -491,7 +522,60 @@ async function saveMemory() {
   toast(r.ok ? "记忆已保存" : "失败", !r.ok);
 }
 
-async function switchProfile(name) {
+async async function checkUpdate(quiet) {
+  const log = $("updLog");
+  log.style.display = "";
+  log.textContent = "检查中…";
+  try {
+    const r = await post("/api/update", {action: "check"});
+    if (!r.ok) { log.textContent = "检查失败：" + (r.error || "?"); return; }
+    log.textContent = r.newer
+      ? ("有新版本：" + r.latest + "（当前 " + r.local + "）
+" + (r.notes || ""))
+      : ("已是最新：" + r.local);
+    $("btnDoUpdate").style.display = r.newer ? "" : "none";
+    if (r.newer && !quiet) {
+      $("updPill").style.display = "";
+      $("updPill").textContent = "新版 " + r.latest;
+    }
+    refresh();
+  } catch (e) { log.textContent = "检查出错：" + e; }
+}
+
+async function doUpdate() {
+  if (!confirm("更新会先备份，然后替换程序文件。
+记忆、人设、config、数据库不会被碰。
+
+继续？")) return;
+  const log = $("updLog");
+  log.style.display = "";
+  log.textContent = "更新中，别关页面…";
+  try {
+    const r = await post("/api/update", {action: "update"});
+    log.textContent = (r.ok ? "更新完成，当前版本 " + r.version : "更新失败")
+      + "
+" + (r.note || "") + "
+
+重启后生效。";
+    $("btnDoUpdate").style.display = "none";
+    refresh();
+  } catch (e) { log.textContent = "更新出错：" + e; }
+}
+
+async function doRollback() {
+  if (!confirm("回到上一次更新前的版本？
+（只回滚程序文件）")) return;
+  const log = $("updLog");
+  log.style.display = "";
+  log.textContent = "回滚中…";
+  try {
+    const r = await post("/api/update", {action: "rollback"});
+    log.textContent = r.ok ? ("已回滚到 " + r.version) : "回滚失败（可能没有备份）";
+    refresh();
+  } catch (e) { log.textContent = "回滚出错：" + e; }
+}
+
+function switchProfile(name) {
   const r = await api("/api/profile", {name});
   if (!r.ok) { toast(r.error, true); return; }
   toast("正在查看「" + name + "」");

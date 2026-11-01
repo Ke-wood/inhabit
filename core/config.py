@@ -16,7 +16,7 @@ CONFIG = ROOT / "config.json"
 
 # 默认值：首次运行或字段缺失时用这些
 DEFAULTS = {
-    "version": "1.0.0",
+    "version": "1.4.0",
     "edition": "open",        # open = 开源版（默认 QQ 通道）；local = 本机自用（微信 hook）
     "active": "阿鱼",          # 正在跑的那个（主循环启动时写）
     "viewing": "阿鱼",         # 面板正在看的那个（可以在跑别的时看另一个）
@@ -74,6 +74,11 @@ DEFAULTS = {
     },
     "publish": {                   # B 站投稿（tools/publish.py）
         "biliup": "",              # biliup 可执行文件路径；留空则自动找 / 读 BILIUP_EXE
+    },
+    # 自动更新：从哪个 GitHub 仓库拉新版
+    "updater": {
+        "repo": "Ke-wood/inhabit",   # owner/name
+        "token": "",                 # 私有库或遇到限流才需要；也可用 GITHUB_TOKEN
     },
     # 让她「看得懂图」：任意 OpenAI 兼容的多模态端点。留空 = 不看图，只记「有人发了张图」。
     "vision": {

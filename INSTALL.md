@@ -33,7 +33,7 @@ cd inhabit
 ### 第 2 步：建角色
 
 ```bash
-python tools/init_persona.py
+python inhabit.py init
 ```
 
 会问你：叫什么、还有别的叫法吗、一句话说她是谁。
@@ -42,7 +42,7 @@ python tools/init_persona.py
 想跳过交互：
 
 ```bash
-python tools/init_persona.py --name 阿鱼 --persona "二十一岁，女的，话不多但不冷"
+python inhabit.py init --name 阿鱼 --persona "二十一岁，女的，话不多但不冷"
 ```
 
 ### 第 3 步：接大脑
@@ -59,7 +59,7 @@ export DEEPSEEK_API_KEY=sk-...
 **B. 面板里填**
 
 ```bash
-python tools/panel.py        # 打开 http://127.0.0.1:8788
+python inhabit.py panel        # 打开 http://127.0.0.1:8788
 ```
 
 「配置」页填 `base_url` / `api_key` / `model`，保存即生效。
@@ -87,7 +87,7 @@ python run_demo.py
 
 ```bash
 python channels/wxhook.py serve 8771     # 收件（或让 ctl 一起拉起）
-python run_wx.py --v2                    # 自主模式
+python inhabit.py run --v2                    # 自主模式
 # 或
 python run_wx.py                         # 应答/门控模式
 ```

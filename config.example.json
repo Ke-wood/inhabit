@@ -7,7 +7,7 @@
     "最后才是 core/config.py 的 DEFAULTS（代码是唯一真相源，本文件字段应与它对齐）。",
     "改完不用重启：面板保存后下一拍就生效（core/config.py 每次读文件的 mtime）。"
   ],
-  "version": "1.0.0",
+  "version": "1.4.0",
   "edition": "open",
   "active": "阿鱼",
   "viewing": "阿鱼",
@@ -130,5 +130,10 @@
   "voice": {
     "tts_voice": "zh-CN-XiaoxiaoNeural",
     "_note": "edge-tts 音色。发语音时才用到；没装 edge-tts 会退回发文字。"
+  },
+  "updater": {
+    "repo": "Ke-wood/inhabit",
+    "token": "",
+    "_note": "从哪个 GitHub 仓库更新。repo 写 owner/name。token 只在需要私有库或遇到 API 限流时才填；也可以用环境变量 GITHUB_TOKEN。"
   }
 }

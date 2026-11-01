@@ -107,7 +107,8 @@ def snapshot() -> dict:
     prof_view["bilibili"] = bili
     base = {
         "now": now.strftime("%Y-%m-%d %H:%M:%S"),
-        "version": config.get("version"),
+        "version": _version(),
+        "update_available": _update_available(),
         "edition": config.get("edition") or "local",
         "profile": prof_view,
         "viewing": prof.get("name"),
@@ -197,6 +198,63 @@ def _guard_writable() -> dict | None:
     if config.running_profiles().get(name):
         return {"ok": False, "error": f"{name} 正在运行，先在面板上关闭它再改"}
     return None
+
+
+def _version() -> str:
+    try:
+        from core import version as V
+        return V.read_version()
+    except Exception:
+        return str(config.get("version") or "")
+
+
+def _update_available() -> dict:
+    """缓存上一次检查结果，别每次刷新都打 GitHub。"""
+    try:
+        from core import version as V
+        st = V.read_state()
+        return {
+            "checked_at": st.get("checked_at") or "",
+            "latest": st.get("latest") or "",
+            "newer": bool(st.get("newer")),
+            "notes": (st.get("notes") or "")[:600],
+        }
+    except Exception:
+        return {"checked_at": "", "latest": "", "newer": False, "notes": ""}
+
+
+def do_update(payload: dict) -> dict:
+    """面板上的「检查更新 / 更新 / 回滚」。"""
+    from tools import update as updater
+    from core import version as V
+    action = str(payload.get("action") or "check")
+    if action == "check":
+        try:
+            rel = updater.latest_release()
+        except Exception as e:
+            return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        if not rel:
+            return {"ok": False, "error": "查不到远端"}
+        local = V.read_version()
+        newer = bool(rel["version"]) and V.is_newer(rel["version"], local)
+        try:
+            V.write_state({**V.read_state(),
+                           "checked_at": time.strftime("%Y-%m-%d %H:%M:%S"),
+                           "latest": rel["version"] or rel["tag"],
+                           "newer": newer,
+                           "notes": rel["notes"]})
+        except Exception:
+            pass
+        return {"ok": True, "local": local, "latest": rel["version"] or rel["tag"],
+                "newer": newer, "source": rel["source"], "notes": rel["notes"]}
+    if action == "update":
+        rc = updater.cmd_update()
+        return {"ok": rc == 0, "rc": rc, "version": V.read_version(),
+                "note": "改完要重启她才生效"}
+    if action == "rollback":
+        rc = updater.cmd_rollback()
+        return {"ok": rc == 0, "rc": rc, "version": V.read_version()}
+    return {"ok": False, "error": f"不认识的动作：{action}"}
 
 
 def do_config(payload: dict) -> dict:
@@ -608,6 +666,7 @@ def do_channel_del(payload: dict) -> dict:
 
 ROUTES = {
     "/api/config": do_config,
+    "/api/update": do_update,
     "/api/focus": do_focus,
     "/api/identity": do_identity,
     "/api/memory": do_memory,

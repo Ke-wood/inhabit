@@ -1,44 +1,21 @@
-"""阿鱼的入口 —— 一个 exe，几种活法。
+"""兼容入口。真正的统一入口是 inhabit.py。
 
-    阿鱼.exe                打开菜单
-    阿鱼.exe run [选项]      主循环（会被菜单/ctl 调起）
-    阿鱼.exe serve [端口]    收件服务（默认 8771）
-    阿鱼.exe panel [端口]    控制面板（默认 8788）
+保留这个文件为了两件事：
+1. 已经打包好的 exe 名字叫这个，改了会让人困惑
+2. PyInstaller 的 spec 指向它
+
+    python shiyu.py            → 等同 python inhabit.py
+    python shiyu.py --help     → 看所有命令
 """
 
 from __future__ import annotations
 
-import os
 import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
 
-# 打包后：模块在 _internal，可写目录在 exe 旁边
-if getattr(sys, "frozen", False):
-    sys.path.insert(0, str(Path(sys.executable).resolve().parent))
-    os.environ.setdefault("FEIYU_ROOT", str(Path(sys.executable).resolve().parent))
-
-
-def main() -> None:
-    argv = sys.argv[1:]
-    cmd = argv[0].lower() if argv else ""
-
-    if cmd == "run":
-        sys.argv = ["run_wx.py"] + argv[1:]
-        import run_wx
-        run_wx.main()
-    elif cmd == "serve":
-        from channels import wxhook
-        wxhook.serve(int(argv[1]) if len(argv) > 1 else 8771)
-    elif cmd == "panel":
-        from tools import panel
-        panel.serve(int(argv[1]) if len(argv) > 1 else 8788)
-    else:
-        from tools import menu
-        menu.main()
-
-
 if __name__ == "__main__":
-    main()
+    import inhabit
+    sys.exit(inhabit.main())

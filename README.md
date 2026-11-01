@@ -46,13 +46,13 @@
 ```bash
 git clone https://github.com/Ke-wood/inhabit.git && cd inhabit
 
-python tools/init_persona.py        # 起个名、写一句「她是谁」，自动建记忆目录
-# 或者直接套一个现成人设：
-python tools/init_persona.py --preset dafeiyu
+python inhabit.py                   # 第一次跑会引导你建一个人
+python inhabit.py init --preset dafeiyu   # 或者直接套现成人设
+
 export DEEPSEEK_API_KEY=sk-...      # 或 OPENAI_API_KEY，任何 OpenAI 兼容端点都行
 
-python run_demo.py                  # 离线跑一段群聊，看她的开口节奏（不联网）
-python tools/panel.py               # 控制面板 → http://127.0.0.1:8788
+python inhabit.py panel             # 控制面板 → http://127.0.0.1:8788
+python inhabit.py doctor            # 环境体检
 ```
 
 想真接一个平台再往下走：[INSTALL.md](INSTALL.md)。
@@ -62,6 +62,20 @@ python tools/panel.py               # 控制面板 → http://127.0.0.1:8788
 缺什么就退回更简单的做法，比如发不了语音就发文字。
 
 ---
+
+## 一个命令
+
+```bash
+python inhabit.py                  # 菜单
+python inhabit.py run --v2         # 主循环（自主模式）
+python inhabit.py run              # 主循环（应答/NPC 模式）
+python inhabit.py panel            # 控制面板
+python inhabit.py update           # 升级到最新版（保留你的所有配置）
+python inhabit.py rollback         # 反悔，退回上一版
+python inhabit.py version          # 当前版本
+python inhabit.py doctor           # 体检
+python inhabit.py init             # 初始化人设
+```
 
 ## 接平台
 
@@ -95,6 +109,8 @@ memory/          SQLite 记忆库与 schema
 bili/            B 站只读接口 + wbi 签名
 tools/           控制面板、启停、初始化、B 站登录、投稿
 web/panel.html   控制面板（单文件，零前端依赖）
+inhabit.py       统一入口（run / panel / update / doctor / init）
+VERSION          版本号
 memory_template/ 空白记忆模板（首次运行复制成 记忆/）
 presets/         现成人设（`--preset dafeiyu` 一键套用）
 persona/         v1 人格卡（v2 不读，留档）
@@ -112,6 +128,7 @@ data/            数据库、消息流、日志（运行时生成，不进版本
 | [docs/architecture.md](docs/architecture.md) | 架构：一拍怎么走、上下文预算、为什么这么设计 |
 | [docs/reference.md](docs/reference.md) | 所有阈值、开关、端口、配置项一张表 |
 | [docs/memory.md](docs/memory.md) | 记忆系统：库 ↔ 文件、同步水位、遗忘语义 |
+| [docs/update.md](docs/update.md) | **更新**：只换程序文件，记忆/配置永不被覆盖 |
 | [docs/address.md](docs/address.md) | **称呼**：接受哪些叫法、被叫错时怎么反应 |
 | [docs/tasks.md](docs/tasks.md) | **任务与共同经历**：实时写入，不等后台 |
 | [docs/channels.md](docs/channels.md) | 通道接入与消息格式 |

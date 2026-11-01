@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# 控制面板：./start.sh [端口]
+# ./start.sh            → 菜单
+# ./start.sh panel      → 面板
 set -e
 cd "$(dirname "$0")"
-exec python3 tools/panel.py "${1:-8788}"
+exec python3 inhabit.py "$@"
