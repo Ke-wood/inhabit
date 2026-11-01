@@ -45,6 +45,8 @@
 git clone https://github.com/Ke-wood/inhabit.git && cd inhabit
 
 python tools/init_persona.py        # 起个名、写一句「她是谁」，自动建记忆目录
+# 或者直接套一个现成人设：
+python tools/init_persona.py --preset dafeiyu
 export DEEPSEEK_API_KEY=sk-...      # 或 OPENAI_API_KEY，任何 OpenAI 兼容端点都行
 
 python run_demo.py                  # 离线跑一段群聊，看她的开口节奏（不联网）
@@ -91,7 +93,8 @@ memory/          SQLite 记忆库与 schema
 bili/            B 站只读接口 + wbi 签名
 tools/           控制面板、启停、初始化、B 站登录、投稿
 web/panel.html   控制面板（单文件，零前端依赖）
-memory_template/ 记忆模板（空白人格，首次运行复制成 记忆/）
+memory_template/ 空白记忆模板（首次运行复制成 记忆/）
+presets/         现成人设（`--preset dafeiyu` 一键套用）
 persona/         v1 人格卡（v2 不读，留档）
 记忆/            她的记忆（运行时生成，不进版本库）
 data/            数据库、消息流、日志（运行时生成，不进版本库）
@@ -108,6 +111,7 @@ data/            数据库、消息流、日志（运行时生成，不进版本
 | [docs/reference.md](docs/reference.md) | 所有阈值、开关、端口、配置项一张表 |
 | [docs/memory.md](docs/memory.md) | 记忆系统：库 ↔ 文件、同步水位、遗忘语义 |
 | [docs/channels.md](docs/channels.md) | 通道接入与消息格式 |
+| [presets/dafeiyu/README.md](presets/dafeiyu/README.md) | **预设：蓝色大肥鱼**（DeepSeek 鲸鱼娘），含出处与边界说明 |
 | [docs/qq.md](docs/qq.md) | **QQ 能力全景**：图片/语音/表情怎么收发，能力探测，来源与致谢 |
 | [docs/npc-mode.md](docs/npc-mode.md) | 剧本杀 NPC / 客服：必回、全量记忆、成本估算 |
 | [docs/publish-bili.md](docs/publish-bili.md) | B 站投稿链路与凭证 |

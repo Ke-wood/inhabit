@@ -18,6 +18,10 @@ memory_vault/
 # ---- 人格卡候选修订（运行时产物，见 persona/candidates.md） ----
 persona/candidates.md
 
+# ---- 预设必须进版本库：它们是人设文本，不是运行时数据 ----
+# （下面这行防止将来有人把 presets/ 也加进忽略规则）
+!/presets/**
+
 # ---- 可选：自备的 Live2D 模型与参考音，版权归各自作者 ----
 assets/live2d/
 assets/voice/

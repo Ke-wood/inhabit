@@ -25,6 +25,22 @@ ROOT = pathlib.Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(ROOT))
 
 TEMPLATE = ROOT / "memory_template"
+PRESETS = ROOT / "presets"
+# 预设里的人设目录改名成 persona，避免和外层 .gitignore 的 `记忆/` 冲突
+PRESET_PERSONA = "persona"
+
+
+def preset_dir(name: str) -> pathlib.Path | None:
+    """预设目录。`--preset dafeiyu` 对应 presets/dafeiyu/。"""
+    d = PRESETS / name
+    return d if (d / PRESET_PERSONA).is_dir() else None
+
+
+def list_presets() -> list[str]:
+    if not PRESETS.is_dir():
+        return []
+    return sorted(x.name for x in PRESETS.iterdir()
+                  if x.is_dir() and (x / PRESET_PERSONA).is_dir())
 DEFAULT_MEMORY = "记忆"
 
 
@@ -71,15 +87,101 @@ def write_self_card(memory: pathlib.Path, name: str) -> None:
         old.unlink()
 
 
+def _preset_name(pd: pathlib.Path) -> str:
+    """预设自己声明的角色名（presets/<名>/name.txt），没有就用目录名。"""
+    f = pd / "name.txt"
+    if f.exists():
+        n = f.read_text(encoding="utf-8").strip()
+        if n:
+            return n
+    return pd.name
+
+
+def _preset_aliases(pd: pathlib.Path) -> str:
+    """预设的可选别名（在 presets/<名>/aliases.txt 里，一行一个）。"""
+    f = pd / "aliases.txt"
+    if f.exists():
+        return ",".join(x.strip() for x in f.read_text(encoding="utf-8").splitlines() if x.strip())
+    return ""
+
+
+def _sync_config(cfg_path: pathlib.Path, name: str, memory: str, aliases: str) -> None:
+    """把角色名 / 记忆目录 / 叫法写进 config.json。"""
+    example = ROOT / "config.example.json"
+    if not cfg_path.exists():
+        if not example.exists():
+            sys.exit("找不到 config.example.json，仓库不完整？")
+        cfg_path.write_text(example.read_text(encoding="utf-8"), encoding="utf-8")
+        print("+ 生成 config.json（从示例复制）")
+    cfg = json.loads(cfg_path.read_text(encoding="utf-8"))
+    extra = [a.strip() for a in aliases.split(",") if a.strip()]
+    names = list(dict.fromkeys([name] + extra))   # 去重且保序
+    profiles = cfg.setdefault("profiles", {})
+    old = profiles.pop(cfg.get("active") or "", None) or {}
+    cfg["active"] = name
+    cfg["viewing"] = name
+    profiles[name] = {
+        "dir": "data",
+        "memory": memory,
+        "persona": "我是谁.md",
+        "channels": old.get("channels", ["qq"]),
+        "thresholds": old.get("thresholds", {}),
+    }
+    cfg.setdefault("identity", {})["names"] = names
+    cfg_path.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+
+
+def _report_preset(pd: pathlib.Path) -> None:
+    """打印预设说明的第一段，让人知道装了什么。"""
+    rd = pd / "README.md"
+    if not rd.exists():
+        return
+    lines = []
+    for line in rd.read_text(encoding="utf-8").splitlines():
+        if line.startswith("#"):
+            continue
+        if line.startswith(">"):
+            lines.append(line.lstrip("> ").strip())
+        elif lines:
+            break
+    if lines:
+        print()
+        print("  " + " ".join(x for x in lines if x))
+        print(f"  详情看 presets/{pd.name}/README.md")
+
 def main() -> None:
     ap = argparse.ArgumentParser()
     ap.add_argument("--name", default="")
     ap.add_argument("--persona", default="")
     ap.add_argument("--aliases", default="", help="逗号分隔，别人怎么叫她")
     ap.add_argument("--memory", default=DEFAULT_MEMORY)
+    ap.add_argument("--preset", default="", help="用哪个预设（见 presets/）")
     ap.add_argument("--force", action="store_true")
     args = ap.parse_args()
 
+    # 用预设时完全不问：名字和人格都从预设里读
+    if args.preset:
+        pd = preset_dir(args.preset)
+        if not pd:
+            avail = "、".join(list_presets()) or "（没有预设）"
+            sys.exit(f"没有这个预设：{args.preset}" + chr(10) + f"现有：{avail}")
+        name = args.name or _preset_name(pd)
+        memory_dir = ROOT / args.memory
+        if memory_dir.exists() and any(memory_dir.iterdir()):
+            if not args.force:
+                sys.exit(f"{memory_dir.name}/ 已经有内容了。要覆盖就加 --force（会先备份）")
+            bak = memory_dir.with_name(f"{memory_dir.name}.bak-{int(time.time())}")
+            shutil.move(str(memory_dir), str(bak))
+            print(f"+ 旧记忆备份到 {bak.name}")
+        if memory_dir.exists():
+            shutil.rmtree(memory_dir)
+        shutil.copytree(pd / PRESET_PERSONA, memory_dir)
+        print(f"+ 套用预设 {args.preset} → {memory_dir.name}/")
+        _sync_config(ROOT / "config.json", name, args.memory,
+                     args.aliases or _preset_aliases(pd))
+        print(f"+ config.json：角色 {name}")
+        _report_preset(pd)
+        return
     # 全给了参数就完全不问 —— 方便脚本化 / CI
     non_interactive = bool(args.name and args.persona)
 
