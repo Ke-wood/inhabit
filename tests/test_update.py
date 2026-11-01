@@ -302,6 +302,25 @@ def test_version_from_file_not_config():
     assert got == vf.read_text(encoding="utf-8").strip().split()[0], got
 
 
+def test_from_version_captured_before_overwrite():
+    """更新后要能说出「从哪个版本升上来的」。
+
+    VERSION 本身也在待覆盖列表里，所以旧版本号必须在循环之前记下来，
+    否则会显示成 1.4.0 → 1.4.0。
+    """
+    src = (ROOT / "tools" / "update.py").read_text(encoding="utf-8")
+    i_bak = src.index("bak = backup(targets)")
+    i_old = src.index("old = V.read_version()")
+    assert i_old < i_bak, "old 版本号必须在备份/覆盖之前读，否则拿到的是新版本"
+
+
+def test_broken_pipe_safe():
+    """输出被管道关掉时不能崩。"""
+    src = (ROOT / "inhabit.py").read_text(encoding="utf-8")
+    assert "BrokenPipeError" in src, "没有处理 BrokenPipe"
+    assert "OSError" in src, "_p 要吞掉 OSError"
+
+
 def main() -> int:
     print("更新模块")
     for name, fn in [
@@ -319,6 +338,8 @@ def main() -> int:
         ("裸 update 真的更新", test_bare_update_does_update),
         ("--dry 别名", test_dry_alias),
         ("版本以 VERSION 为准", test_version_from_file_not_config),
+        ("旧版本号在覆盖前记录", test_from_version_captured_before_overwrite),
+        ("管道断开不崩", test_broken_pipe_safe),
     ]:
         check(name, fn)
     print(f"\n{ok} 通过 / {fail} 失败")

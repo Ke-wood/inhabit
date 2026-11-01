@@ -55,7 +55,12 @@ BANNER = r"""
 
 
 def _p(msg: str) -> None:
-    print(msg, flush=True)
+    """打印，但绝不因为输出被关掉而崩（管道/重定向常见）。"""
+    try:
+        print(msg, flush=True)
+    except (BrokenPipeError, OSError, ValueError):
+        # 输出端已经关了（`| head`、父进程退出…）：静默放弃这一行
+        pass
 
 
 def _need_setup() -> bool:
@@ -221,4 +226,17 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        rc = main()
+    except BrokenPipeError:
+        rc = 0
+    try:
+        sys.stdout.flush()
+    except Exception:
+        pass
+    # 输出已经断了就别再让 Python 在退出时刷一次缓冲
+    try:
+        sys.stdout = open(os.devnull, "w")
+    except Exception:
+        pass
+    sys.exit(rc)

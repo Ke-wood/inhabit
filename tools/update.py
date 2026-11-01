@@ -266,6 +266,8 @@ def apply(src: pathlib.Path, p: dict | None = None, *, dry: bool = False) -> dic
         return {"ok": True, "dry": True, "changed": p["changed"],
                 "added": p["added"], "updated": len(targets)}
 
+    # 先记下旧版本号：VERSION 本身也在 targets 里，循环一跑就变成新版了
+    old = V.read_version()
     bak = backup(targets)
     written: list[str] = []
     try:
@@ -289,7 +291,6 @@ def apply(src: pathlib.Path, p: dict | None = None, *, dry: bool = False) -> dic
         return {"ok": False, "error": f"{type(e).__name__}: {e}",
                 "rolled_back": len(written), "backup": str(bak)}
 
-    old = V.read_version()
     new = _guess_version(src) or old
     (ROOT / "VERSION").write_text(new + "\n", encoding="utf-8")
     V.write_state({"version": new, "from": old, "at": _stamp(),
