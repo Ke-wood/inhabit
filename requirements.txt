@@ -1,9 +1,10 @@
-# 运行时是纯标准库，下面三个是可选的增强项：
+# 运行时是纯标准库，下面几项都是可选的增强：
 #   pip install -r requirements.txt
 #
-# 不装也能跑：缺哪个就退回更简单的实现（见注释）。
+# 不装也能跑：缺哪个就退回更简单的实现（见每行注释）。
 
 beautifulsoup4>=4.12   # 网页正文抽取（core/web.py）；没装就退回正则
 lxml>=5.0              # bs4 的解析器；没装 bs4 也会退回正则
 brotli>=1.1            # B 站接口的 br 压缩响应（bili/client.py）；没装就跳过
 qrcode[pil]>=7.4       # B 站 TV 端登录二维码（tools/bili_login_tv.py）
+edge-tts>=7.0          # 发语音（core/act.py: _tts）；没装就退回发文字。LGPLv3

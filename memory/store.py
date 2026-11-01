@@ -154,6 +154,11 @@ def add_event(
     return eid
 
 
+def bind_source(con: sqlite3.Connection, event_id: int, ref: str) -> None:
+    """把一条事件的 source_ref 指向本地媒体文件（图片/语音落盘后的路径）。"""
+    con.execute("UPDATE events SET source_ref=? WHERE id=?", (str(ref), int(event_id)))
+
+
 def set_state(con: sqlite3.Connection, key: str, value: str) -> None:
     con.execute(
         "INSERT INTO self_state(key,value,updated_at) VALUES (?,?,?) "

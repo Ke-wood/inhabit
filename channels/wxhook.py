@@ -99,8 +99,14 @@ def normalize(payload: dict) -> dict | None:
         if str(payload.get(k) or "").strip().lower() in SKIP_IDS:
             return None            # 文件传输助手 / 腾讯新闻这类整段忽略
     text = g("msg", "content", "text", "Msg")
+    # 图片/表情/文件这类消息没有 text 字段，但同样是「人发来的东西」：
+    # 以前这里直接 return None，导致她永远不知道有人发过图。
     if not text:
-        return None
+        wx_type = t
+        kind = {3: "[图片]", 34: "[语音]", 43: "[视频]", 47: "[表情]", 49: "[卡片]"}.get(wx_type)
+        if not kind:
+            return None
+        text = kind
     head = str(text).lstrip()[:12]
     if any(head.startswith(x) for x in SKIP_XML):
         return None                # 公众号文章卡片之类，不是人话

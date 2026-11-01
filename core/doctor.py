@@ -83,9 +83,21 @@ def check() -> dict:
             else:
                 host, port = _host_port(url, 5700)
                 ok = _port_open(port, host)
+                detail = f"OneBot {url} " + ("可达" if ok else "连不上")
+                tip = "" if ok else "QQ 框架没跑，或地址/端口不对"
+                if ok:
+                    try:                    # 端口通了再问一次能力，比「端口开着」有用
+                        from channels import onebot
+                        caps = onebot.capabilities(refresh=True)
+                        detail = onebot.describe_caps()
+                        if not caps.get("image"):
+                            tip = "这个实现不支持发图；她发图时会退回文字"
+                        elif not caps.get("record"):
+                            tip = "这个实现不支持发语音；她会退回文字"
+                    except Exception:
+                        pass
                 add(f"channel:{name}", f"渠道 · {label}", ok, "ok" if ok else "warn",
-                    f"OneBot {url} " + ("可达" if ok else "连不上"),
-                    "" if ok else "QQ 框架没跑，或地址/端口不对")
+                    detail, tip)
         else:  # http
             url = c.get("base_url") or ""
             ok = bool(url)

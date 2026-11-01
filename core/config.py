@@ -75,6 +75,16 @@ DEFAULTS = {
     "publish": {                   # B 站投稿（tools/publish.py）
         "biliup": "",              # biliup 可执行文件路径；留空则自动找 / 读 BILIUP_EXE
     },
+    # 让她「看得懂图」：任意 OpenAI 兼容的多模态端点。留空 = 不看图，只记「有人发了张图」。
+    "vision": {
+        "base_url": "",
+        "api_key": "",
+        "model": "",
+    },
+    # 让她「会说话」：edge-tts（LGPLv3，可选安装）。留空用默认音色。
+    "voice": {
+        "tts_voice": "zh-CN-XiaoxiaoNeural",
+    },
     # 渠道：一个角色可以同时挂好几个，按目标场景分流
     "channels": {
         "wechat": {

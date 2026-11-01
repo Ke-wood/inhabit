@@ -18,6 +18,17 @@
 
 ## 需要你自己获取
 
+### 0. QQ 的 OneBot 11 实现（QQ 通道，必需）
+
+- **不随本项目分发**。这是你的 QQ 号能接进本项目的唯一前提。
+- 标准：[OneBot 11](https://github.com/botuniverse/onebot-11)（本项目实现其协议，不复制其代码）
+- 可选实现（任选其一）：
+  - [NapCatQQ](https://github.com/NapNeko/NapCatQQ) —— 推荐，活跃
+  - [Lagrange.Core](https://github.com/LagrangeDev/Lagrange.Core) —— .NET
+  - [go-cqhttp](https://github.com/Mrs4s/go-cqhttp) —— 已停更，仅兼容性参考
+- 许可：各实现自己的许可，与本项目无关。**使用即表示你自行承担平台风险。**
+- 详细能力与来源见 [docs/qq.md](docs/qq.md)。
+
 ### 1. biliup（B 站投稿，可选）
 
 - 项目：<https://github.com/biliup/biliup-rs>
@@ -41,9 +52,16 @@
 - 若你要用：Live2D Cubism Core 是**专有许可**，官方示例模型（Haru/Hiyori/Mao）
   另有素材条款，请按其官方条款使用，不要直接塞进公开仓库
 
-### 4. 语音合成 / 视频生成
+### 4. 语音合成（可选，`send_voice` 用）
 
-- 本仓库不含 TTS 模型、参考音、渲染工具链
+- [edge-tts](https://github.com/rany2/edge-tts)，**LGPLv3**
+- 本项目**不 vendored** 它，只是列在 `requirements.txt` 里让你自己装
+- 背后是微软 Edge 的在线 TTS 服务；条款归 Microsoft，高频调用可能被限流
+- 不装也能用：她发不出语音时会退回发文字
+
+### 5. 视频生成
+
+- 本仓库不含视频生成链路（不生成、不渲染、不合成）
 - `publish_bili` 只负责上传**你已经有的**视频文件
 
 ### 5. 模型服务

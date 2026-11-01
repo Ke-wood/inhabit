@@ -6,6 +6,12 @@
     wxid_xxx / xxx@chatroom  → 微信
     qq_group_123             → QQ
     http_xxx                 → 其他 HTTP 端点
+
+两种发法
+--------
+`send(scene, text)`           纯文本，所有渠道都支持
+`send_segments(scene, segs)`  消息段（图片/语音/表情/@），目前只有 QQ 支持；
+                              微信 hook 没有发图接口，会自动降级成文字
 """
 
 from __future__ import annotations
@@ -55,6 +61,48 @@ def send(scene: str, text: str) -> dict:
     except Exception as e:
         return {"ok": False, "error": f"{type(e).__name__}: {e}"}
     return {"ok": False, "error": f"没有可用渠道（场景 {scene}）"}
+
+
+def send_segments(scene: str, segments) -> dict:
+    """发消息段。不支持富媒体的渠道自动降级成纯文本。"""
+    from channels import message as seg
+    from core import config
+    name = config.channel_for(scene)
+    try:
+        if name == "qq":
+            from channels import onebot
+            return onebot.send_segments(scene, segments)
+        # 其余渠道只能发字
+        text = seg.to_text(segments)
+        if not text:
+            return {"ok": False, "error": "这个渠道只能发文字，内容里没有可发的文字"}
+        r = send(scene, text)
+        if isinstance(r, dict):
+            r = dict(r)
+            r["downgraded"] = True
+        return r
+    except Exception as e:
+        return {"ok": False, "error": f"{type(e).__name__}: {e}"}
+
+
+def send_image(scene: str, path: str, *, caption: str = "") -> dict:
+    """便捷入口：发一张图（可带一句话）。
+
+    本地文件按 base64 发：OneBot 端不一定要和本项目同一台机器，
+    用 `file:///` 只在同机时成立，跨机器就发不出去。
+    """
+    from channels import message as seg
+    import pathlib as _p
+    pp = _p.Path(str(path))
+    pic = seg.image_file(str(pp)) if pp.exists() else seg.image(path)
+    parts = ([seg.text(caption)] if caption else []) + [pic]
+    return send_segments(scene, parts)
+
+
+def send_voice(scene: str, audio_path: str, *, text: str = "") -> dict:
+    from channels import message as seg
+    parts = ([seg.text(text)] if text else []) + [seg.record(audio_path)]
+    return send_segments(scene, parts)
 
 
 def describe() -> str:

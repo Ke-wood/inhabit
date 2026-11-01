@@ -38,6 +38,17 @@ def _port_open(port: int, host: str = "127.0.0.1", timeout: float = 0.5) -> bool
         return False
 
 
+def _media_ref(rec: dict) -> list[str]:
+    """从归一化记录里挑出本地媒体路径（图片/语音）。"""
+    out: list[str] = []
+    for s in (rec.get("segments") or []):
+        d = s.get("data") or {}
+        f = str(d.get("local_file") or "")
+        if f:
+            out.append(f)
+    return out
+
+
 class Live:
     def __init__(self, con, brain, *, bot: Self | None = None, log=print,
                  sender=None, min_think_gap: float | None = None,
@@ -129,12 +140,32 @@ class Live:
         msg = Msg(rec.get("actor_id") or "", names.label(rec.get("actor_id") or ""),
                   rec["text"], ts, str(rec.get("msgid") or ""))
         self.bot.observe(msg, scene, channel=str(rec.get("channel") or "wechat"))
+        # 图片/语音：把本地落盘路径记下来，她后面才能「看」或「听」
+        media = _media_ref(rec)
+        if media:
+            self._attach_media(scene, media)
         self.pending.append({"scene": scene, "who": msg.actor_name,
                              "text": rec["text"], "ts": ts,
-                             "is_group": bool(rec.get("is_group"))})
+                             "is_group": bool(rec.get("is_group")),
+                             "media": media})
         self.last_active = now
         self.stats["fed"] += 1
         self.con.commit()
+
+    def _attach_media(self, scene: str, media: list[str]) -> None:
+        """把刚收到的那条消息的 source_ref 补成本地媒体路径。"""
+        path = media[0] if media else ""
+        if not path:
+            return
+        try:
+            eid = self.con.execute(
+                "SELECT id FROM events WHERE scene=? ORDER BY id DESC LIMIT 1",
+                (scene,)).fetchone()
+            if eid:
+                store.bind_source(self.con, int(eid["id"]), path)
+                self.con.commit()
+        except Exception:
+            pass
 
     def _direct(self, batch: list[dict]) -> bool:
         """是不是直接冲她来的：看最新那条，别让旧消息带偏。

@@ -33,6 +33,9 @@ ACT_SYSTEM = """你心里有个念头，现在决定怎么处理它。
 - 忘掉：{"action":"forget","id":事件编号,"why":"为什么不想记了"}
 - 记住什么：{"action":"remember","text":"要记住的事","about":"关于谁"}
 - 发到 B 站：{"action":"publish_bili","file":"本机视频文件路径","title":"标题","desc":"简介","tags":"标签"}
+- 发图：{"action":"send_image","path":"本机图片路径 或 https:// 图片地址","text":"配的话，可省略"}
+- 发语音：{"action":"send_voice","text":"要说的话"}（用你自己的声音念出来；也可以给 path 指定已有音频）
+- 仔细看：{"action":"look","what":"刚发来的图/视频"}（只在你真的收到图时才用）
 - 改好感：{"action":"feel","about":"谁","delta":5,"why":"为什么"}
 - 改自己：{"action":"revise_self","text":"你想把自己改成什么样","why":"为什么改"}
 - 去睡觉：{"action":"sleep","wake":"07:30","why":"困了"}
@@ -80,6 +83,11 @@ ACT_SYSTEM = """你心里有个念头，现在决定怎么处理它。
   已经弄清楚的就关掉它，别让同一个问题一直挂在头顶反复问。
 - drop 是「这件事我不想弄明白了」。和 resolve 不同：resolve 是有答案，
   drop 是决定不要答案了。有些事没有答案也没关系 —— 不想了就不想了。
+- send_image 是发图片：path 必须是真实存在的文件或 http(s) 地址。不知道发什么就别发。
+  配的话写 text，会跟图一起发出去。
+- send_voice 是发语音：text 写想说的话，会用你自己的音色念出来（需要装 edge-tts）。
+  一次只说一两句，长了不像人说话。
+- look 是「仔细看」：只在对方真的发了图片或视频、你想看清里面是什么时用。
 - publish_bili 是把本机已有的一个视频文件投稿到 B 站（需要先按 docs/publish-bili.md 配好 biliup）。
   file 必须是你确实看到过的路径，别自己编。公开发布，你自己署名，一天最多一条。
   没想清楚就先别发。
@@ -88,7 +96,7 @@ ACT_SYSTEM = """你心里有个念头，现在决定怎么处理它。
 # 这些念头是「自己心里的活动」，没有明确的接收者时不该外化成话
 INTERNAL_PLANS = {"recall", "browse_bili", "remember", "keep", "feel",
                   "revise_self", "sleep", "search_web", "fetch",
-                  "publish_bili", "reflect", "wander"}
+                  "publish_bili", "reflect", "wander", "look"}
 
 PLAN_HINT = {
     "reply": "你想说句话。",
@@ -126,6 +134,7 @@ def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
     go_retry = 0
     sleep_retry = 0
     made = 0
+    media_sent = 0
     prompt = _initial_prompt(bot, thought, scene)
     system = bot.persona_block() + "\n\n" + ACT_SYSTEM
 
@@ -284,6 +293,80 @@ def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
             bot.con.commit()
             remembered += 1
             trace.append(f"记下了：{text}")
+            continue
+
+        if action == "send_image":
+            if media_sent >= 2:
+                trace.append("这一轮已经发过图了")
+                break
+            path = str(cmd.get("path") or cmd.get("file") or cmd.get("url") or "").strip()
+            if not path:
+                trace.append("想发图但没给路径")
+                prompt += f"{E}# 你没给 path。要发图就写本机路径或 http 地址，不然就别发。"
+                continue
+            if not (pathlib.Path(path).exists() or path.startswith(("http://", "https://"))):
+                trace.append(f"图片不存在：{path[:40]}")
+                prompt += f"{E}# 那个路径不存在。别编路径 —— 没有真图就别发图。"
+                continue
+            caption = str(cmd.get("text") or "").strip()
+            try:
+                ok = _send_media(send, bot, target=scene, kind="image", path=path,
+                                 caption=caption, thought=thought)
+            except Exception as e:
+                trace.append(f"发图失败：{type(e).__name__}: {str(e)[:60]}")
+                prompt += f"{E}# 发图失败：{type(e).__name__}"
+                continue
+            if ok:
+                media_sent += 1
+                trace.append(f"发了张图{('，配了句：' + caption[:20]) if caption else ''}")
+                bot.spend_energy(1)
+                break
+            trace.append("图没发出去")
+            prompt += f"{E}# 图没发出去（可能是这个渠道不支持图片）。改说句话吧。"
+            continue
+
+        if action == "send_voice":
+            if media_sent >= 2:
+                trace.append("这一轮已经发过语音了")
+                break
+            what = str(cmd.get("text") or "").strip()
+            path = str(cmd.get("path") or cmd.get("file") or "").strip()
+            if not what and not path:
+                trace.append("想发语音但没说内容")
+                prompt += f"{E}# 发语音要写 text（想说的话）。"
+                continue
+            try:
+                ok = _send_media(send, bot, target=scene, kind="record",
+                                 path=path, text=what, thought=thought)
+            except Exception as e:
+                trace.append(f"发语音失败：{type(e).__name__}: {str(e)[:60]}")
+                prompt += f"{E}# 发语音失败：{type(e).__name__}: {str(e)[:60]}"
+                continue
+            if ok:
+                media_sent += 1
+                trace.append(f"发了条语音：{what[:20]}")
+                bot.spend_energy(1)
+                break
+            trace.append("语音没发出去")
+            prompt += f"{E}# 语音没发出去。可能是没装 edge-tts 或渠道不支持，改成说吧。"
+            continue
+
+        if action == "look":
+            path = str(cmd.get("path") or "").strip()
+            if not path:
+                # 默认看「他刚发来的那张」
+                path = str(_last_image_path(bot) or "")
+            if not path or not pathlib.Path(path).exists():
+                trace.append("想看但没有图")
+                prompt += f"{E}# 你手上没有可以看的图。等对方发了再说。"
+                continue
+            desc = _look_image(bot, brain, path)
+            if desc:
+                trace.append(f"看清了：{desc[:40]}")
+                prompt += f"{E}# 你看清了那张图{E}{desc}"
+            else:
+                trace.append("看了但没看出什么")
+                prompt += f"{E}# 你看不出那张图里是什么。老实说看不清，别编。"
             continue
 
         if action == "publish_bili":
@@ -706,7 +789,7 @@ def parse_action(raw: str) -> dict | None:
     if action not in ("say", "browse_bili", "recall", "wait", "revise_self",
                       "feel", "remember", "keep", "forget", "search_web", "fetch",
                       "settle", "sleep", "publish_bili", "focus",
-                      "resolve", "drop"):
+                      "resolve", "drop", "send_image", "send_voice", "look"):
         return None
     d["action"] = action
     return d
@@ -714,7 +797,8 @@ def parse_action(raw: str) -> dict | None:
 
 _ALIAS = {"send": "say", "reply": "say", "speak": "say", "message": "say",
           "send_text": "say", "chat": "say", "search": "search_web",
-          "browse": "browse_bili", "look": "browse_bili"}
+          "browse": "browse_bili", "send_pic": "send_image", "image": "send_image",
+          "voice": "send_voice", "record": "send_voice", "say_voice": "send_voice"}
 
 
 def _pick_text(cmd: dict) -> str:
@@ -759,6 +843,140 @@ def _num(v):
         return None
 
 
+def _last_image_path(bot) -> str:
+    """她最近收到的一张图（本地已落盘的那份）。"""
+    try:
+        row = bot.con.execute(
+            "SELECT source_ref FROM events WHERE kind='message' AND source_ref LIKE '%media%'"
+            " ORDER BY ts DESC LIMIT 1").fetchone()
+        if row and row["source_ref"] and pathlib.Path(row["source_ref"]).exists():
+            return str(row["source_ref"])
+    except Exception:
+        pass
+    try:
+        from core.paths import ROOT
+        d = ROOT / "data" / "media" / "image"
+        if d.exists():
+            files = sorted((x for x in d.iterdir() if x.is_file()),
+                           key=lambda x: x.stat().st_mtime, reverse=True)
+            if files:
+                return str(files[0])
+    except Exception:
+        pass
+    return ""
+
+
+def _look_image(bot, brain, path: str) -> str:
+    """把图交给会看图的大脑。没配视觉模型就老实返回空串，不瞎编。"""
+    try:
+        from core import config
+        vision = (config.load().get("vision") or {})
+    except Exception:
+        vision = {}
+    model = str(vision.get("model") or "").strip()
+    base = str(vision.get("base_url") or "").strip()
+    key = str(vision.get("api_key") or "").strip()
+    if not (model and base):
+        return ""
+    try:
+        import base64, json as _json, urllib.request
+        raw = pathlib.Path(path).read_bytes()
+        mime = "image/jpeg" if path.lower().endswith((".jpg", ".jpeg")) else "image/png"
+        b64 = base64.b64encode(raw).decode("ascii")
+        body = _json.dumps({
+            "model": model,
+            "messages": [{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text":
+                     "用一两句中文说清这张图里有什么。只描述你看得到的，别推测。"
+                     "如果有人或文字，说出来。不超过 60 字。"},
+                    {"type": "image_url",
+                     "image_url": {"url": f"data:{mime};base64,{b64}"}},
+                ],
+            }],
+            "max_tokens": 200,
+        }, ensure_ascii=False).encode("utf-8")
+        req = urllib.request.Request(f"{base.rstrip('/')}/chat/completions", data=body,
+                                     method="POST")
+        req.add_header("Content-Type", "application/json")
+        req.add_header("Authorization", f"Bearer {key}")
+        with urllib.request.urlopen(req, timeout=60) as r:
+            d = _json.loads(r.read().decode("utf-8", "replace"))
+        return str((d["choices"][0]["message"]["content"] or "")).strip()
+    except Exception:
+        return ""
+
+
+def _tts(text: str) -> str:
+    """文字转语音，返回音频路径。没装 edge-tts 就抛异常，由调用方降级。"""
+    import asyncio
+    try:
+        import edge_tts
+    except ImportError as e:
+        raise RuntimeError("没装 edge-tts（pip install edge-tts）") from e
+    from core import config
+    from core.paths import ROOT
+    voice = str(((config.load().get("voice") or {}).get("tts_voice")) or "zh-CN-XiaoxiaoNeural")
+    out_dir = ROOT / "data" / "media" / "tts"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    import hashlib
+    name = hashlib.sha1((voice + text).encode("utf-8")).hexdigest()[:16] + ".mp3"
+    out = out_dir / name
+    if out.exists() and out.stat().st_size > 0:
+        return str(out)
+
+    async def _go():
+        comm = edge_tts.Communicate(text, voice)
+        await comm.save(str(out))
+
+    asyncio.run(_go())
+    return str(out)
+
+
+def _send_media(send, bot, *, target: str, kind: str, path: str = "", text: str = "",
+                caption: str = "", thought=None) -> bool:
+    """发图/发语音的统一入口。send 是上层注入的发送函数（可发消息段）。"""
+    from channels import message as seg
+    if kind == "image":
+        payload = seg.image(path)
+        parts = []
+        if caption:
+            parts.append(seg.text(caption))
+        parts.append(payload)
+        res = send(target, parts)
+        if isinstance(res, dict) and not res.get("ok", True):
+            # 渠道不支持富消息：退回发文字
+            if caption:
+                send(target, [seg.text(caption)])
+            return False
+        if caption:
+            bot.note_self(caption, target)
+        bot.note_self("[图片]", target)
+        return True
+
+    if kind == "record":
+        audio = path
+        said = text
+        if not audio and said:
+            audio = _tts(said)
+        if not audio:
+            return False
+        parts = [seg.record(audio)]
+        if said:
+            parts.insert(0, seg.text(said))
+        res = send(target, parts)
+        if isinstance(res, dict) and not res.get("ok", True):
+            return False
+        bot.note_self(said or "[语音]", target)
+        return True
+
+    return False
+
+
 def _default_send(scene: str, text: str):
-    from channels import wxhook
-    return wxhook.send_text(scene, text)
+    """默认发送：字符串按纯文本，list 按消息段（QQ 支持富媒体）。"""
+    from channels import router
+    if isinstance(text, (list, tuple)):
+        return router.send_segments(scene, text)
+    return router.send(scene, text)

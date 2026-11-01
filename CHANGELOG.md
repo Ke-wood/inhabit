@@ -1,5 +1,45 @@
 # CHANGELOG
 
+## v1.1.0 — QQ 富媒体与 OneBot 11 完整接入
+
+QQ 通道从「只能发纯文本」升级到完整的消息段能力，建立在 OneBot 11 标准之上。
+
+### 新增
+
+- `channels/message.py`：**消息段抽象**。构造、解析（CQ 码 / 数组 / 字符串）、
+  文本化、类型查询。图文混排、@、回复、卡片、音乐分享都能表达。
+- `channels/onebot.py`：**能力探测**（`get_version_info` / `can_send_image` /
+  `can_send_record` / `get_status`）。不再假设实现支持什么，先问再降级。
+- 收图落盘：优先调 `get_image` 让实现下载，失败再按 url 拉；存到 `data/media/image/`，
+  路径写进事件的 `source_ref`，她后面才能「看」。
+- 收语音：同样落盘到 `data/media/record/`，经 `get_record` 转 mp3。
+- 她的三个新动作：
+  - `send_image` —— 发图（本地文件走 base64，支持 URL，可发闪照）
+  - `send_voice` —— 发语音（edge-tts 合成，用配置里的音色）
+  - `look` —— 看图（需要配多模态模型；没配就老实说看不清，不瞎编）
+- `router.send_segments()`：按渠道发消息段；不支持富媒体的渠道自动降级成纯文本。
+- 配置新增 `vision`（多模态端点）与 `voice`（TTS 音色）两段。
+- `onebot.send_like()` / `delete_msg()` / `call()`：标准 API 的通用出口。
+- 测试：`tests/test_onebot.py`（16 项，纯单元）+ `tests/test_qq_e2e.py`
+  （8 项，起假 OneBot 服务器验证收发全链路）。
+- 文档：`docs/qq.md` —— 能力全景、来源与致谢、边界与安全。
+
+### 修复
+
+- **纯图片/语音消息被丢弃**：`wxhook.normalize()` 以前在 `text` 为空时直接 `return None`，
+  她现在能收到「有人发了张图」这件事。
+- **微信侧媒体消息**：`type` 为 3/34/43/47/49 的消息不再当垃圾丢掉，转成 `[图片]` 等占位。
+- `router.send_image()` 本地文件改用 base64（原来用 `file:///`，只在本机同机时成立）。
+- `doctor` 的 QQ 体检从「端口通不通」升级为「能力探测」，
+  能直接告诉你这个实现支不支持发图/发语音。
+
+### 说明
+
+本项目**不实现 QQ 协议、不分发任何 QQ 框架二进制**。
+所有能力来自 OneBot 11 标准与社区实现（NapCat / Lagrange / go-cqhttp），
+来源与许可差异见 `docs/qq.md` §8 与 `THIRD_PARTY.md`。
+
+
 ## v1.0.0 — 第一个开源版本
 
 从作者本机的运行副本整理而来：去掉全部个人记忆、真人身份与第三方二进制，
