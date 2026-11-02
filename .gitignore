@@ -51,3 +51,9 @@ venv/
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# ---- 桌宠素材（社区二创，MIT 只覆盖代码不覆盖美术）----
+assets/pet/
+
+# ---- 调研中间产物（报告与实测脚本，不进版本库）----
+_research/

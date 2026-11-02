@@ -1,5 +1,62 @@
 # CHANGELOG
 
+## v1.5.0 — 桌宠、场景节奏、注意力判断、流式输出
+
+四个方向，全部可选，不影响原有 QQ/微信行为。
+
+### 桌宠（`desk:` 场景）
+
+只有三件事：**看屏幕**（值不值得看由注意力判断）、**收你的话**（输入栏）、
+**用气泡回你**。不做语音、不散步、不蹦跳。
+
+- `tools/pet_window.py`：PySide6 透明置顶窗口，只借素材不借逻辑
+- `core/pet_link.py`：主程序 → 桌宠（8791，纯标准库，没装 PySide6 也能 import）
+- `core/pet_input.py`：桌宠 → 主程序（8792），输入栏的话进主循环
+- 面板新增「桌宠」卡片：开关、选模型，不用敲命令
+- 模型可换：`assets/pet/models/<名字>/`，托盘菜单能切内置的或指向自己的目录
+
+### 场景节奏（`core/scenes.py`）
+
+| | chat | desk | live |
+|---|---|---|---|
+| min_think_gap | 20s | 60s | 0.5s |
+| recall_limit | 12 | 8 | **3** |
+| facts_here | 8 | 6 | **2** |
+| max_steps | 3 | 1 | 1 |
+
+chat 画像直接读 config，**QQ 行为零回归**（12 项测试锁住）。
+直播把上下文压到 3 条 —— 这是「上下文爆炸」的解：不是少存，是少取。
+
+### 注意力判断（`core/attention.py`）
+
+决定「这一刻值不值得动」，四项加权：silence / interest / novelty / energy。
+零模型调用，纯算术。接在时间闸之后（AND 关系），不是替代它。
+
+效果：没什么可说的日子她真的不冒泡了，日志会写清原因。
+
+### 流式输出
+
+- `core/brain.py`：`speak_stream()` 真 SSE，`speak()` 行为完全不变
+- `core/sentencer.py`：token 流切句，遇句末标点切、逗号不切、40/60 字兜底
+- 真机实测首字提前 **214ms（24%）**
+
+### 修掉的 bug
+
+- **呼吸卡顿**：`drawPixmap(int(x), int(y))` 把浮点位移量化成整数像素，
+  40 帧只剩 2 个值。改用 `QRectF` 走亚像素插值
+- **拖动消失**：窗口用 `WA_ShowWithoutActivating` 不抢焦点 + 周期轻抬层级
+- **桌宠满屏跑**：去掉 `_wander()`，位置只由用户拖动决定
+- **channel_for 子串误判**：`live:qq_room` 曾被认成 QQ 渠道
+- **scene_belongs_to 回归**：改前缀匹配后 `desk:x` 被判为不属于任何角色，
+  多角色同跑时桌宠消息会被丢弃
+- **GeneratorExit**：流式生成器提前 break 时会崩主循环
+
+### 测试
+
+新增 `test_attention`(11) / `test_scenes`(15) / `test_stream`(25)，
+全部 **130 项**通过。
+
+
 ## v1.4.3 — 修好「总说已是最新」
 
 ### 问题

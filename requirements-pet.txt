@@ -1,0 +1,13 @@
+# 桌宠窗口的可选依赖 —— 只有想开桌面宠物的人才需要装。
+#
+#   pip install -r requirements-pet.txt
+#
+# 不装也能用主程序：桌宠相关代码全部按「可选增强」写，
+# 没装 PySide6 时 core/pet_link.py 仍然可以 import（纯标准库），
+# 主程序只是拿一个 NullPetLink，什么都不做。
+#
+# 从这里精简掉的（相对参考实现 1190fasheqi/dafeiyu-pet）：
+#   psutil / pynvml —— CPU、显卡、内存监控功能我们已经去掉
+#   requests        —— 直连 DeepSeek API、查天气的功能也已经去掉
+
+PySide6>=6.5

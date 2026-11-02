@@ -15,6 +15,7 @@ from typing import Callable
 from core import memfiles, relations, sleep, web
 from core.brain import Brain, split_segments
 from core.mind import Thought
+from core.scenes import profile_for
 from core.self import Self
 from memory import store
 
@@ -115,13 +116,16 @@ PLAN_HINT = {
 
 def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
         send: Callable[[str, str], object] | None = None,
-        max_steps: int = 3, address_pe: dict | None = None) -> dict:
+        max_steps: int | None = None, address_pe: dict | None = None) -> dict:
     # 她念头里指了对象就发过去；没指就留在眼前
     if getattr(thought, "target", ""):
         rid = _resolve_place(bot, thought.target)
         if rid:
             scene = rid
     scene = scene or bot.scene or bot.last_heard or ""
+    # 步数按场景取：直播一轮只够做一件事（多一步 = 延迟翻倍，观众等不了）；
+    # 聊天沿用老的 3 步。显式传了 max_steps 仍然最优先。
+    steps = profile_for(scene).max_steps if max_steps is None else int(max_steps)
     send = send or _default_send
     spoken: list[str] = []
     trace: list[str] = []
@@ -138,7 +142,7 @@ def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
     prompt = _initial_prompt(bot, thought, scene, address_pe=address_pe)
     system = bot.persona_block() + "\n\n" + ACT_SYSTEM
 
-    for _ in range(max(1, max_steps)):
+    for _ in range(max(1, steps)):
         try:
             raw = brain.speak(system=system, user=prompt, avoid=spoken[-3:])
         except Exception as e:

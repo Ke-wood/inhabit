@@ -23,6 +23,7 @@ from core.act import act
 from core.janitor import Janitor
 from core.loop import Msg
 from core.mind import think
+from core.scenes import SceneProfile, profile_for
 from core.self import QUIET_HOURS, Self
 from memory import store
 
@@ -95,21 +96,63 @@ class Live:
         self._resume()
 
     # 阈值每拍现读 —— 面板上改完下一拍就生效
+    #
+    # 场景画像优先：desk:/live: 走 core/scenes.py 的画像（直播 0.5 秒一跳），
+    # 其余场景（qq_/wxid_/...）走 chat 画像，而 chat 画像**就是 config 的值**，
+    # 所以 QQ/微信的行为和以前逐字一致 —— 见 scenes._scene_profile_args()。
+    def profile(self, scene: str | None = None) -> SceneProfile:
+        """某个场景的节奏画像；不给 scene 就看「她此刻在哪」。
+
+        外部想查「她现在按什么节奏活」就调这个 —— 面板、日志、
+        主循环的轮询间隔都从这里取，别再各写一份数字。
+        """
+        return profile_for(scene if scene is not None
+                           else (self._scene_now() or self.default_scene or ""))
+
+    def _scene_now(self) -> str:
+        """这一拍算哪个场景。
+
+        用 last_heard 而不是自造一个字段：她"此刻在哪"本来就是这个含义，
+        新开一个 _scene 会变成两份真相，重启后还可能不同步。
+        """
+        return self.bot.last_heard or self.bot.scene or ""
+
+    def _p(self, field_name: str, fallback: float, scene: str | None = None) -> float:
+        """按当前场景取一个节奏参数。
+
+        chat 场景不查画像的数值，而是走原来那条 `config.thresholds()` 表达式 ——
+        这不是多此一举：回归风险全在这里，路径一模一样才敢说"零回归"。
+        """
+        p = self.profile(scene)
+        if p.name != "chat":
+            val = getattr(p, field_name, None)
+            if val is not None:
+                return float(val)
+        return float(config.thresholds().get(field_name, fallback))
+
+    def think_gap_for(self, scene: str | None = None) -> float:
+        """这个场景两次「想」之间最少隔多久。tick 用即将处理的那批消息来算。"""
+        return self._p("min_think_gap", self._t_min, scene)
+
     @property
     def min_think_gap(self) -> float:
-        return float(config.thresholds().get("min_think_gap", self._t_min))
+        return self._p("min_think_gap", self._t_min)
 
     @property
     def idle_think_gap(self) -> float:
-        return float(config.thresholds().get("idle_think_gap", self._t_idle))
+        return self._p("idle_think_gap", self._t_idle)
 
     @property
     def focus_gap(self) -> float:
-        return float(config.thresholds().get("focus_gap", self._t_focus))
+        # 画像里没有 focus_gap：思考时刻是她自己按的加速键，和场所无关，
+        # 只在直播里收一档（20 秒的间隔会把弹幕全憋掉）。
+        base = float(config.thresholds().get("focus_gap", self._t_focus))
+        p = self.profile()
+        return min(base, p.min_think_gap) if p.name == "live" else base
 
     @property
     def speak_gap(self) -> float:
-        return float(config.thresholds().get("speak_gap", self._t_speak))
+        return self._p("speak_gap", self._t_speak)
 
     @property
     def browse_gap_sec(self) -> float:
@@ -238,6 +281,15 @@ class Live:
             store.set_state(self.con, "inbox_ok", now_flag)
             self.con.commit()
 
+    def _novelty(self) -> float:
+        """环境有多「新」。桌宠场景靠它判断要不要主动说话。
+
+        现在只能给一个很粗的估计：有没有新消息、距上次开口多久。
+        真正的屏幕变化检测还没接（见 docs/pet-and-live.md）——
+        这里返回 0 表示「没检测到新东西」，宁可她安静，也别乱冒泡。
+        """
+        return 0.0
+
     def tick(self, now: float | None = None) -> dict | None:
         now = now or time.time()
         self._health(now)                # 先看一眼收件服务还活着没
@@ -250,7 +302,10 @@ class Live:
         scene = self.bot.last_heard or self.bot.scene or self.default_scene
         direct = False
         if self.pending:
-            if now - self.last_think < self.min_think_gap:
+            # 间隔按「这批消息所在的场景」取，而不是她上次在哪 ——
+            # 她刚从群里切到直播间时，不能还按群里的 20 秒憋着。
+            hot = self.pending[-1].get("scene") or scene
+            if now - self.last_think < self.think_gap_for(hot):
                 return None
             batch, self.pending = self.pending[:12], self.pending[12:]
             direct = self._direct(batch)
@@ -275,13 +330,40 @@ class Live:
             scene = max(by_scene, key=lambda s: (len(by_scene[s]), by_scene[s][-1]["ts"]))
         else:
             focusing = self.bot.focusing(now)
-            gap = self.focus_gap if focusing else self.idle_think_gap
+            # 没人说话时的间隔同样按场景走：desk 三分钟才想一次（屏幕静止，
+            # 老冒泡像闹鬼），live 3 秒（弹幕不会停），chat 还是 config 的 60 秒。
+            scene = self.bot.last_spoke or self.bot.scene or self.default_scene
+            gap = (self.focus_gap if focusing
+                   else self._p("idle_think_gap", self._t_idle, scene))
             if now - self.last_think < gap:
                 self.janitor.tick(now)   # 没人说话的空档，正好整理
                 return None
             hour = datetime.now().hour
-            if hour in config.thresholds().get("quiet_hours", QUIET_HOURS) and not focusing:
+            quiet = hour in config.thresholds().get("quiet_hours", QUIET_HOURS)
+            if quiet and not focusing:
                 return None
+            # 时间闸放行之后，再问一句「这一刻值不值得动」。
+            # 纯本地算术（core/attention.py），零模型调用 —— 目的是让她
+            # 在没什么可说的日子里少冒泡，而不是按定时器说废话。
+            if not focusing:
+                try:
+                    from core import attention as _att
+                    sig = _att.Signals(
+                        silence_sec=now - (self.last_speak or self.last_active or now),
+                        energy=self.bot.energy(),
+                        has_message=False,
+                        mentioned=False,
+                        novelty=self._novelty(),
+                        quiet_hour=quiet,
+                    )
+                    verdict = _att.judge(sig)
+                    if not verdict:
+                        self.log(f"· 没什么值得说的（{verdict.reason}，"
+                                 f"{_att.explain(sig)}）")
+                        self.janitor.tick(now)
+                        return None
+                except Exception:
+                    pass                      # 判断层坏了不能挡住她
             if focusing:
                 trigger = f"（你按了「认真想一会儿」，正在想：{self.bot.focus_topic}）"
                 why = "思考时刻"
@@ -289,7 +371,7 @@ class Live:
                 trigger = "（没人说话。可以继续待着，也可以去做点什么）"
                 why = "闲下来了"
             # 主动开口回她自己上次说话的地方，不是「最后跟她说话的人」
-            scene = self.bot.last_spoke or self.bot.scene or self.default_scene
+            # （scene 在上面算间隔时已经取好了，别在这里再取一次 —— 两份真相）
             if not scene:
                 self.log("· 没有可用的场景，跳过主动想")
                 return None
@@ -337,7 +419,7 @@ class Live:
             self.log("  （刚查过，别重复）")
             return {"thought": t.content, "spoken": []}
         # 护栏只拦"她主动连续开口"；别人直接找她时不拦
-        if not direct and now - self.last_speak < self.speak_gap:
+        if not direct and now - self.last_speak < self._p("speak_gap", self._t_speak, scene):
             self.log("  （刚说过话，先不开口，过会儿再看）")
             self.pending = batch + self.pending
             self.retry_at = now + 30

@@ -7,7 +7,7 @@
     "最后才是 core/config.py 的 DEFAULTS（代码是唯一真相源，本文件字段应与它对齐）。",
     "改完不用重启：面板保存后下一拍就生效（core/config.py 每次读文件的 mtime）。"
   ],
-  "version": "1.4.3",
+  "version": "1.5.0",
   "edition": "open",
   "active": "阿鱼",
   "viewing": "阿鱼",
@@ -135,5 +135,37 @@
     "repo": "Ke-wood/inhabit",
     "token": "",
     "_note": "从哪个 GitHub 仓库更新。repo 写 owner/name。token 只在需要私有库或遇到 API 限流时才填；也可以用环境变量 GITHUB_TOKEN。"
+  },
+  "scenes": {
+    "_note": "按场景覆盖节奏参数。只写要改的字段，其余用 core/scenes.py 的默认画像。chat（QQ/微信）的画像是现有默认值，别动它。",
+    "desk": {
+      "min_think_gap": 60,
+      "idle_think_gap": 180,
+      "recall_limit": 8,
+      "facts_here": 6,
+      "max_steps": 1
+    },
+    "live": {
+      "min_think_gap": 0.5,
+      "idle_think_gap": 3,
+      "poll_sec": 0.2,
+      "recall_limit": 3,
+      "facts_here": 2,
+      "max_steps": 1,
+      "speak_gap": 0
+    }
+  },
+  "pet": {
+    "enabled": false,
+    "host": "127.0.0.1",
+    "port": 8791,
+    "_note": "桌宠桥。enabled=true 且桌宠窗口在跑时，desk: 场景的话会显示成气泡。桌宠是独立进程（tools/pet_window.py），需要 PySide6。"
+  },
+  "live": {
+    "enabled": false,
+    "backend": "vts",
+    "url": "ws://127.0.0.1:8001",
+    "token": "",
+    "_note": "直播后端。backend 可选 vts（连 VTube Studio）或 dryrun（只记日志）。本项目不渲染 Live2D、不分发模型，只发参数。"
   }
 }

@@ -20,6 +20,28 @@ import json
 import urllib.request
 
 
+_PET_LINK = None
+
+
+def _pet_link():
+    """桌宠桥的单例。第一次用时按 config 的 pet 段造一个。"""
+    global _PET_LINK
+    if _PET_LINK is None:
+        try:
+            from core import pet_link
+            from core import config
+            _PET_LINK = pet_link.make_pet_link(config.load())
+        except Exception:
+            return None
+    return _PET_LINK
+
+
+def reset_pet_link() -> None:
+    """配置改了之后重造（面板切换开关时调用）。"""
+    global _PET_LINK
+    _PET_LINK = None
+
+
 def send(scene: str, text: str) -> dict:
     from core import config
     name = config.channel_for(scene)
@@ -44,6 +66,22 @@ def send(scene: str, text: str) -> dict:
         if name == "qq":
             from channels import onebot
             return onebot.send_msg(scene, text)
+        if name == "desk":
+            # 桌宠：把话交给 pet_link，由它转给桌宠窗口弹气泡。
+            # 桌宠没开时返回 NullPetLink，静默失败，不影响主程序。
+            link = _pet_link()
+            if link is None:
+                return {"ok": False, "error": "桌宠链路没就绪（core/pet_link.py 缺失？）"}
+            link.say(text)
+            return {"ok": True, "local": True, "via": "desk"}
+        if name == "live":
+            # 直播：VTS。第一版只把她要说的话记下来并交给 avatar 后端；
+            # 真正的语音合成与口型在 core/avatar.py 里（还没接）。
+            try:
+                from core import avatar
+                return avatar.speak_on_live(scene, text)
+            except Exception as e:
+                return {"ok": False, "error": f"直播后端没就绪：{type(e).__name__}: {e}"}
         if name == "other":
             c = (config.channels().get("other") or {})
             base = (c.get("base_url") or "").rstrip("/")
@@ -113,4 +151,11 @@ def describe() -> str:
         if not ch.get("enabled"):
             continue
         rows.append(f"{ch.get('label') or name}（{name}）")
+    # 本地场景不需要「启用」，它取决于桌宠/直播进程在不在
+    try:
+        link = _pet_link()
+        if link is not None and link.available():
+            rows.append("桌面上（desk）")
+    except Exception:
+        pass
     return "、".join(rows) or "（没有启用的渠道）"

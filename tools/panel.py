@@ -277,6 +277,138 @@ def do_update(payload: dict) -> dict:
     return {"ok": False, "error": f"不认识的动作：{action}"}
 
 
+# ------------------------------------------------------------------ 桌宠
+PET_LOCK = threading.Lock()
+PET_PROC = {'p': None}
+
+
+def _pet_cfg() -> dict:
+    """读 pet 段（不经过 config 缓存，避免和别处并发写打架）。"""
+    try:
+        cfg = config.load()
+        return dict(cfg.get('pet') or {})
+    except Exception:
+        return {}
+
+
+def _pet_models() -> list[dict]:
+    """列出可用素材。每套一个目录，必须含 正面.png。"""
+    base = ROOT_DIR / 'assets' / 'pet' / 'models'
+    out = []
+    if not base.is_dir():
+        return out
+    for d in sorted(base.iterdir()):
+        if d.is_dir() and (d / '正面.png').is_file():
+            n = sum(1 for f in d.glob('*.png'))
+            out.append({'name': d.name, 'path': str(d), 'files': n})
+    return out
+
+
+def _pet_running() -> bool:
+    p = PET_PROC.get('p')
+    return bool(p is not None and p.poll() is None)
+
+
+def do_pet(payload: dict) -> dict:
+    """桌宠开关 / 换模型 / 查状态。"""
+    action = str(payload.get('action') or 'state')
+    cfg = config.load()
+    pet = dict(cfg.get('pet') or {})
+
+    if action == 'state':
+        return {
+            'ok': True,
+            'enabled': bool(pet.get('enabled')),
+            'running': _pet_running(),
+            'model': pet.get('model') or '',
+            'models': _pet_models(),
+            'pyqt': _has_pyside(),
+        }
+
+    if action == 'toggle':
+        want = bool(payload.get('enabled'))
+        pet['enabled'] = want
+        cfg['pet'] = pet
+        config.save(cfg)
+        if want:
+            return _pet_start()
+        return _pet_stop()
+
+    if action == 'model':
+        name = str(payload.get('name') or '').strip()
+        pet['model'] = name
+        cfg['pet'] = pet
+        config.save(cfg)
+        if _pet_running():
+            _pet_send({'cmd': 'model', 'name': name})
+        return {'ok': True, 'model': name}
+
+    if action == 'start':
+        return _pet_start()
+
+    if action == 'stop':
+        return _pet_stop()
+
+    return {'ok': False, 'error': '不认识的动作：' + action}
+
+
+def _has_pyside() -> bool:
+    try:
+        import PySide6  # noqa: F401
+        return True
+    except Exception:
+        return False
+
+
+def _pet_start() -> dict:
+    """起桌宠进程。没装 PySide6 就明确告诉用户，不假装成功。"""
+    with PET_LOCK:
+        if _pet_running():
+            return {'ok': True, 'running': True, 'note': '已经在跑了'}
+        if not _has_pyside():
+            return {'ok': False,
+                    'error': '没装 PySide6。先跑 pip install -r requirements-pet.txt'}
+        try:
+            import subprocess
+            script = ROOT_DIR / 'tools' / 'pet_window.py'
+            p = subprocess.Popen([sys.executable, str(script)],
+                                 cwd=str(ROOT_DIR),
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+            PET_PROC['p'] = p
+            return {'ok': True, 'running': True, 'pid': p.pid}
+        except Exception as e:
+            return {'ok': False, 'error': f'{type(e).__name__}: {e}'}
+
+
+def _pet_stop() -> dict:
+    with PET_LOCK:
+        p = PET_PROC.get('p')
+        if p is not None and p.poll() is None:
+            try:
+                p.terminate()
+                p.wait(timeout=5)
+            except Exception:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+        PET_PROC['p'] = None
+        return {'ok': True, 'running': False}
+
+
+def _pet_send(payload: dict) -> bool:
+    """给桌宠发一条指令。没在跑就安静失败。"""
+    import socket as _s
+    try:
+        s = _s.create_connection(('127.0.0.1', 8791), timeout=1.5)
+        s.sendall((json.dumps(payload, ensure_ascii=False) + chr(10)).encode('utf-8'))
+        s.close()
+        return True
+    except Exception:
+        return False
+
+
 def do_config(payload: dict) -> dict:
     # 阈值/开关改了会影响正在跑的那一拍，必须锁
     # 渠道/API/B站 是启动参数和外部凭证，随时能改
@@ -686,6 +818,7 @@ def do_channel_del(payload: dict) -> dict:
 
 ROUTES = {
     "/api/config": do_config,
+    "/api/pet": do_pet,
     "/api/update": do_update,
     "/api/focus": do_focus,
     "/api/identity": do_identity,

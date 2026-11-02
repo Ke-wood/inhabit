@@ -688,6 +688,22 @@ def main_v2(con, brain, offset: int) -> None:
     log(f"阿鱼 v2 上线，大脑={type(brain).__name__}，监听 {INBOX.name}")
     log("心智：想 → 念头 → 做（say / browse_bili / search_web / recall / wait）")
 
+    # 桌宠的输入栏：用户在她身上打字，走这条上行通道进来。
+    # 起不来（端口被占）不影响主循环，只是桌宠那边会提示「她不在线」。
+    try:
+        from core import pet_input
+        import queue as _q
+        _pet_q: "_q.Queue[str]" = _q.Queue()
+
+        def _on_pet_input(text: str) -> None:
+            _pet_q.put(text)
+
+        pet_input.serve(_on_pet_input)
+        log(f"桌宠输入：{pet_input.scene()} ← {pet_input.CORE_PORT}")
+    except Exception as e:
+        _pet_q = None
+        log(f"桌宠输入没起来（不影响聊天）：{type(e).__name__}: {e}")
+
     while True:
         try:
             size = INBOX.stat().st_size
@@ -706,8 +722,26 @@ def main_v2(con, brain, offset: int) -> None:
                 live.wake_up()
             if not live.paused and live.maybe_sleep():
                 live.paused = True               # 刚决定去睡
+            # 先把桌宠输入排空：它和文件收件箱是两条独立的来源
+            if _pet_q is not None:
+                try:
+                    while True:
+                        text = _pet_q.get_nowait()
+                        live.feed({
+                            "scene": pet_input.scene(),
+                            "actor_id": "desk_user",
+                            "actor_name": "你",
+                            "text": text,
+                            "ts": time.time(),
+                            "is_group": False,
+                        })
+                        log(f"[桌宠] 你：{text[:40]}")
+                except _q.Empty:
+                    pass
             live.tick()
-            time.sleep(2.0)
+            # 轮询间隔按场景画像走：聊天 2 秒（和以前一样），直播间 0.2 秒。
+            # 以前这里写死 2.0 —— 直播场景下光标还没刷新，弹幕已经刷过去了。
+            time.sleep(max(0.05, live.profile().poll_sec))
         except FileNotFoundError:
             time.sleep(1.0)
         except Exception as e:

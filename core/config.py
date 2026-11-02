@@ -14,9 +14,15 @@ from core.paths import ROOT
 
 CONFIG = ROOT / "config.json"
 
+# 本地场景：不经过任何网络渠道。桌宠、直播、内心活动、本机信箱。
+LOCAL_SCENE_PREFIXES = ("desk:", "live:", "ai:", "inner")
+# channel_for() 给这些场景返回的名字，和前缀一一对应（去掉冒号）
+LOCAL_SCENE_CHANNELS = tuple(p.rstrip(":") for p in LOCAL_SCENE_PREFIXES)
+
+
 # 默认值：首次运行或字段缺失时用这些
 DEFAULTS = {
-    "version": "1.4.3",
+    "version": "1.5.0",
     "edition": "open",        # open = 开源版（默认 QQ 通道）；local = 本机自用（微信 hook）
     "active": "阿鱼",          # 正在跑的那个（主循环启动时写）
     "viewing": "阿鱼",         # 面板正在看的那个（可以在跑别的时看另一个）
@@ -119,6 +125,9 @@ DEFAULTS = {
             "note": "任意 HTTP 端点，POST /send 收消息",
         },
     },
+    # 场景节奏覆盖：只写要改的字段，其余用 core/scenes.py 里的默认画像。
+    # 留空也能跑 —— chat（QQ/微信）永远沿用上面 thresholds 的值。
+    "scenes": {},
 }
 
 _cache: dict = {}
@@ -344,6 +353,11 @@ def profile_channels(name: str | None = None) -> list[str]:
 def scene_belongs_to(scene: str, name: str | None = None) -> bool:
     """这条消息归不归这个角色管。"""
     ch = channel_for(scene)
+    # 本地场景（desk:/live:/ai_/inner）不属于任何渠道，但它们是「她自己待的地方」，
+    # 人人都有份 —— 以前 channel_for 认不出它们才碰巧返回 True；现在认出来了，
+    # 就得显式放行，否则桌宠/直播的消息会被多角色分流直接丢掉。
+    if ch in LOCAL_SCENE_CHANNELS:
+        return True
     if not ch:
         # 认不出渠道的（比如没前缀的老数据）交给默认角色
         return (name or load().get("active")) == (load().get("active"))
@@ -351,12 +365,26 @@ def scene_belongs_to(scene: str, name: str | None = None) -> bool:
 
 
 def channel_for(scene: str) -> str:
+    """这条消息来自哪个渠道。
+
+    历史教训：这里原来用 `p in s`（子串匹配），于是 `live:qq_room` 会被
+    判成 QQ 渠道。改成「前缀精确匹配」+「本地场景先短路」，
+    既修掉误判，也让 desk:/live: 不被当成网络渠道。
+    """
     s = (scene or "").lower()
+    if not s:
+        return ""
+    # 本地场景：不走网络渠道（桌宠/直播/内心/信箱）
+    for local in LOCAL_SCENE_PREFIXES:
+        if s.startswith(local):
+            return local.rstrip(":")
     for name, ch in channels().items():
         if not ch.get("enabled"):
             continue
         for p in ch.get("prefixes") or []:
-            if s.startswith(p.lower()) or p.lower() in s:
+            # 前缀匹配；@chatroom 这类是后缀，单独判
+            pl = p.lower()
+            if s.startswith(pl) or (pl.startswith("@") and pl in s):
                 return name
     # 兜底：长得像微信 id 就走微信（但微信没启用就别硬塞）
     if "wxid_" in s or "@chatroom" in s:

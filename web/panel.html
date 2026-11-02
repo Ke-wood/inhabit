@@ -152,6 +152,25 @@ details code{background:#0d1117;padding:1px 6px;border-radius:4px;color:var(--ac
 <div class="grid">
   <div class="card"><h2>阈值</h2><div id="thresholds"></div></div>
   <div class="card"><h2>开关</h2><div id="switches"></div></div>
+  <div class="card">
+    <h2>桌宠</h2>
+    <p class="dim" style="font-size:12px">
+      桌面角落的一小块地方。只做三件事：看屏幕（由注意力判断值不值得）、
+      收你的话、用气泡回你。<b>不散步、不说语音。</b>
+    </p>
+    <p>
+      <label><input type="checkbox" id="petOn" onchange="petToggle(this.checked)">
+      <b>启用桌宠</b></label>
+      <span class="pill" id="petState">—</span>
+    </p>
+    <p style="font-size:13px">
+      <span class="dim">模型：</span>
+      <select id="petModel" onchange="petSetModel(this.value)"
+        style="background:#0d1117;border:1px solid var(--line);border-radius:8px;
+               color:var(--fg);padding:5px 9px;font-size:13px"></select>
+    </p>
+    <p class="dim" id="petHint" style="font-size:12px"></p>
+  </div>
 </div>
 
 <div class="grid">
@@ -394,6 +413,7 @@ function render(d) {
        + (u.latest ? (" · 远端 " + u.latest) : ""))
     : ("当前 v" + (d.version || "?") + " · 还没检查过");
   $("btnDoUpdate").style.display = u.newer ? "" : "none";
+  petLoad();
   $("clock").textContent = d.now + " · 每 3 秒刷新";
 
   const sel = $("profileSel");
@@ -522,7 +542,44 @@ async function saveMemory() {
   toast(r.ok ? "记忆已保存" : "失败", !r.ok);
 }
 
-async async function checkUpdate(quiet) {
+async 
+async function petLoad() {
+  try {
+    const r = await post("/api/pet", {action: "state"});
+    if (!r.ok) return;
+    $("petOn").checked = !!r.enabled;
+    $("petState").textContent = r.running ? "运行中" : (r.enabled ? "已启用但没在跑" : "关");
+    const sel = $("petModel");
+    sel.innerHTML = "";
+    (r.models || []).forEach(m => {
+      const o = document.createElement("option");
+      o.value = m.name;
+      o.textContent = m.name + "（" + m.files + " 张）";
+      if (m.name === r.model) o.selected = true;
+      sel.appendChild(o);
+    });
+    if (!(r.models || []).length) {
+      sel.innerHTML = '<option value="">还没有素材</option>';
+    }
+    $("petHint").textContent = r.pyqt
+      ? ""
+      : "没装 PySide6：pip install -r requirements-pet.txt";
+  } catch (e) {}
+}
+
+async function petToggle(on) {
+  const r = await post("/api/pet", {action: "toggle", enabled: on});
+  if (!r.ok) { $("petHint").textContent = r.error || "失败"; }
+  else { $("petHint").textContent = ""; }
+  petLoad();
+}
+
+async function petSetModel(name) {
+  await post("/api/pet", {action: "model", name: name});
+  petLoad();
+}
+
+async function checkUpdate(quiet) {
   const log = $("updLog");
   log.style.display = "";
   log.textContent = "检查中…";

@@ -11,6 +11,7 @@ from datetime import datetime
 
 from core import persona
 from core.loop import Msg, importance_of
+from core.scenes import profile_for
 from memory import store
 
 WINDOW_KEEP = 40          # 每个场景保留最近多少条（有界）
@@ -396,13 +397,21 @@ class Self:
                 f"你活了：{self.age_days} 天\n"
                 f"{self.relations_text()}")
 
-    def facts_here(self, scene: str | None = None, limit: int = 10) -> str:
+    def facts_here(self, scene: str | None = None, limit: int | None = None) -> str:
         """关于眼前这几个人，我记着他们什么。
 
         事实库以前只在 recall 时才被翻到，导致隔了几小时的事
         （比如他叫我女儿）明明记着，当下却想不起来。常驻一小份。
+
+        limit 不给就按场景画像取。注意 chat 这里**故意保留历史上的 10**，
+        不用画像里的 8（= config 的 facts_here）：这两个值本来就不是一回事，
+        直接把调用点切到画像等于给 QQ/微信少带 2 条事实 —— 那是隐性回归。
+        画像的 8 是"配置意图"，这里是"现行行为"，等哪天真要统一再单独改。
         """
         s = scene or self.last_heard or self.scene or ""
+        if limit is None:
+            p = profile_for(s)
+            limit = 10 if p.name == "chat" else p.facts_here
         who: list[str] = []
         for m in reversed(self.windows.get(s, [])[-8:]):
             n = (m.actor_name or "").strip()
@@ -428,14 +437,26 @@ class Self:
                     out.append(f"{name}：{text}")
         return "\n".join(out[:limit])
 
-    def context(self, scene: str | None = None, n: int = 12) -> dict:
-        """一次性给 Think / Act 用的上下文。"""
+    def context(self, scene: str | None = None, n: int | None = None) -> dict:
+        """一次性给 Think / Act 用的上下文。
+
+        n 不给就按场景画像取：chat 沿用历史上写死的 12 条（不跟着 config 的
+        recall_limit 走，否则用户一改配置就换了 QQ 的预算，是隐性回归）；
+        desk/live 用各自画像的 recall_limit（桌宠 8、直播 3），
+        弹幕再多也不会把 prompt 撑爆。
+        """
         s = scene or self.last_heard or self.scene
+        if n is None:
+            p = profile_for(s or "")
+            # chat 保留历史上写死的 12（和 config 的 recall_limit 默认值一致，
+            # 但不受用户改配置影响）—— 换值就是换 QQ 的上下文预算，算回归。
+            n = 12 if p.name == "chat" else p.recall_limit
         return {
             "where": self.where(s),
             "clock": self.clock(),
             "state": self.state_block(),
             "recent": self.recent_all(n),
+            "profile": profile_for(s or ""),
             "facts": self.facts_here(s),
             "thoughts": self.thoughts_text(),
             "loops": self.loops_text(),
