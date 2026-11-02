@@ -529,10 +529,14 @@ async async function checkUpdate(quiet) {
   try {
     const r = await post("/api/update", {action: "check"});
     if (!r.ok) { log.textContent = "检查失败：" + (r.error || "?"); return; }
+    const mine = r.local_notes ? ("
+
+—— 你这一版的说明 ——
+" + r.local_notes) : "";
     log.textContent = r.newer
       ? ("有新版本：" + r.latest + "（当前 " + r.local + "）
-" + (r.notes || ""))
-      : ("已是最新：" + r.local);
+" + (r.notes || "") + mine)
+      : ("已是最新：" + r.local + mine);
     $("btnDoUpdate").style.display = r.newer ? "" : "none";
     if (r.newer && !quiet) {
       $("updPill").style.display = "";

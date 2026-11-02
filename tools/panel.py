@@ -223,6 +223,25 @@ def _update_available() -> dict:
         return {"checked_at": "", "latest": "", "newer": False, "notes": ""}
 
 
+def _changelog(n: int = 30) -> str:
+    """本地读更新说明（最新那一段），面板上直接显示，不用去 GitHub。"""
+    f = ROOT_DIR / "CHANGELOG.md"
+    if not f.exists():
+        return ""
+    text = f.read_text(encoding="utf-8")
+    i = text.find(chr(10) + "## ")
+    if i < 0:
+        return ""
+    out = []
+    for line in text[i + 1:].splitlines():
+        if line.startswith("## ") and out:
+            break
+        out.append(line)
+        if len(out) >= n:
+            break
+    return chr(10).join(out).strip()
+
+
 def do_update(payload: dict) -> dict:
     """面板上的「检查更新 / 更新 / 回滚」。"""
     from tools import update as updater
@@ -246,7 +265,8 @@ def do_update(payload: dict) -> dict:
         except Exception:
             pass
         return {"ok": True, "local": local, "latest": rel["version"] or rel["tag"],
-                "newer": newer, "source": rel["source"], "notes": rel["notes"]}
+                "newer": newer, "source": rel["source"], "notes": rel["notes"],
+                "local_notes": _changelog()}
     if action == "update":
         rc = updater.cmd_update()
         return {"ok": rc == 0, "rc": rc, "version": V.read_version(),

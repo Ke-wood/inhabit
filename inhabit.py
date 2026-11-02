@@ -7,7 +7,8 @@
     python inhabit.py update          检查并更新到最新版
     python inhabit.py update --dry    只看会改哪些文件
     python inhabit.py rollback        撤回上一次更新
-    python inhabit.py version         看当前版本
+    python inhabit.py version         看当前版本与更新状态
+    python inhabit.py changelog       看更新说明（本地，不用去 GitHub）
     python inhabit.py doctor          环境体检
     python inhabit.py init [--preset X]  初始化人设与记忆
 
@@ -92,6 +93,22 @@ def _ensure_setup(preset: str = "") -> None:
         sys.exit(rc)
 
 
+def cmd_changelog(lines: int = 40) -> int:
+    """本地看更新说明，不用去 GitHub。"""
+    f = HERE / "CHANGELOG.md"
+    if not f.exists():
+        _p("没有 CHANGELOG.md")
+        return 1
+    n = 0
+    for line in f.read_text(encoding="utf-8").splitlines():
+        if n >= lines:
+            _p(f"...（`python inhabit.py changelog --all` 看全部）")
+            break
+        _p(line)
+        n += 1
+    return 0
+
+
 def cmd_version() -> int:
     from core import version as V
     from core import config
@@ -103,7 +120,11 @@ def cmd_version() -> int:
         who = "?"
     _p(f"inhabit {v}" + (f"  ·  角色：{who}" if who != "?" else ""))
     _p(f"根目录：{HERE}")
+    # 本地就能看到更新状态，不用去 GitHub
     st = V.read_state()
+    if st.get("latest"):
+        newer = st.get("newer")
+        _p(f"远端最新：{st['latest']}" + ("（有新版，`inhabit.py update`）" if newer else "（已是最新）"))
     if st.get("version"):
         _p(f"上次更新：{st.get('from')} → {st.get('version')}（{st.get('at')}）")
     return 0
@@ -178,6 +199,7 @@ COMMANDS = {
     "check": lambda a: cmd_update(["check"] + list(a)),
     "rollback": lambda a: cmd_update(["rollback"]),
     "version": lambda a: cmd_version(),
+    "changelog": lambda a: cmd_changelog(10 ** 6 if "--all" in a else 40),
     "doctor": lambda a: cmd_doctor(),
     "init": lambda a: cmd_init(a),
     "menu": lambda a: cmd_menu(),
