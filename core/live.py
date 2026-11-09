@@ -405,7 +405,7 @@ class Live:
                 return {"thought": t.content, "spoken": []}
         if t.plan == "none":
             self.log("  （只是想想，不做什么）")
-            self._close(t, "done")
+            self._close(t, "done", outcome="想了想，没做什么")
             return {"thought": t.content, "spoken": []}
         # B 站限流：不把念头扔掉 —— 改成去网上查同一件事。
         # 以前这里直接 return，结果她每分钟把同一句话重想一遍（念叨的由来）。
@@ -427,7 +427,7 @@ class Live:
 
         r = act(self.bot, self.brain, t, scene=scene, send=self._send,
                 address_pe=_recent_address(self.pending, scene))
-        self._close(t, "done")
+        self._close(t, "done", outcome=r.get("outcome", ""))
         if any("看了《" in line for line in r["trace"]):
             self.stats["browsed"] += 1
             self.last_browse = now
@@ -490,10 +490,15 @@ class Live:
             pass
 
     # ---------------------------------------------------------------- 输出
-    def _close(self, thought, status: str = "done") -> None:
-        """念头处理完就关掉，别一直挂在池子里重复冒出来。"""
+    def _close(self, thought, status: str = "done", outcome: str = "") -> None:
+        """念头处理完就关掉，别一直挂在池子里重复冒出来。
+
+        outcome 记的是「这个念头最后落到哪儿」—— 下一拍 think 会把它读出来，
+        让她知道自己上一轮做过什么。不写的话，她会每轮从零重想同一件事。
+        """
         if getattr(thought, "id", None):
-            store.set_thought_status(self.con, thought.id, status)
+            store.set_thought_status(self.con, thought.id, status,
+                                     outcome=(outcome or "")[:200] or None)
             self.con.commit()
 
     def _send(self, scene: str, text: str):

@@ -176,7 +176,7 @@ v1 另有写死在 `core/gate.py` 的频率闸（改它要动代码）：
 | `entities` / `relations` | 人与关系：昵称、熟悉度、好感 |
 | `self_state` | 她的状态（心情、精力、睡到几点、身份缓存） |
 | `reflections` | 日记与反思 |
-| `thoughts` | 念头池（v2 的核心） |
+| `thoughts` | 念头池（v2 的核心）。`outcome` 记这个念头最后落到哪儿，供下一轮参考 |
 | `open_loops` | 悬而未决的事 |
 | `search_pool` | 搜到但还没决定记不记的暂存区 |
 | `expressions` / `intents` | **预留表，当前代码未使用**，可以忽略 |

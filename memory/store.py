@@ -116,6 +116,13 @@ def _migrate(con: sqlite3.Connection) -> None:
                     "ON events(channel, source_ref)")
     except sqlite3.OperationalError:
         pass
+    # 念头的结局：老库没有这一列，补上（新库里 schema.sql 已经建好）
+    try:
+        cols = {r[1] for r in con.execute("PRAGMA table_info(thoughts)")}
+        if "outcome" not in cols:
+            con.execute("ALTER TABLE thoughts ADD COLUMN outcome TEXT")
+    except sqlite3.OperationalError:
+        pass
 
 
 # ------------------------------------------------------------------ 写入
@@ -527,9 +534,34 @@ def open_thoughts(con, limit: int = 5) -> list[dict[str, Any]]:
     return [dict(r) for r in rows]
 
 
-def set_thought_status(con, tid: int, status: str) -> None:
-    con.execute("UPDATE thoughts SET status=?, updated_at=? WHERE id=?",
-                (status, now_iso(), tid))
+def set_thought_status(con, tid: int, status: str, outcome: str | None = None) -> None:
+    """关掉一个念头，顺手记下它最后怎么了。
+
+    outcome 是「这个念头最后落到哪儿」的短句（说了什么 / 查到了什么 / 没做成）。
+    下一拍 think 会把它读出来 —— 否则她记不住自己上一轮想了什么、做了什么，
+    每轮都从零开始重想，表现出来就是「同一件事反复念叨」。
+    """
+    if outcome is None:
+        con.execute("UPDATE thoughts SET status=?, updated_at=? WHERE id=?",
+                    (status, now_iso(), tid))
+    else:
+        con.execute("UPDATE thoughts SET status=?, outcome=?, updated_at=? WHERE id=?",
+                    (status, str(outcome)[:200], now_iso(), tid))
+
+
+def recent_thoughts(con, limit: int = 2,
+                    statuses: tuple[str, ...] = ("done", "dropped")) -> list[dict[str, Any]]:
+    """刚过去的几轮念头（默认只取已办完/已放下的），新的在前。
+
+    只取「已经收场」的是有意的：还挂在池子里的念头由 open_thoughts 走另一条线，
+    两边混在一起，她会把「我正打算做」和「我上一轮做过」看成一回事。
+    """
+    marks = ",".join("?" * len(statuses)) or "?"
+    rows = con.execute(
+        f"SELECT * FROM thoughts WHERE status IN ({marks}) "
+        "ORDER BY updated_at DESC, id DESC LIMIT ?",
+        (*statuses, limit)).fetchall()
+    return [dict(r) for r in rows]
 
 
 def drop_stale_thoughts(con, keep: int = 20) -> int:

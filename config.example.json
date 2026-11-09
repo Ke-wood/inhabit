@@ -7,7 +7,7 @@
     "最后才是 core/config.py 的 DEFAULTS（代码是唯一真相源，本文件字段应与它对齐）。",
     "改完不用重启：面板保存后下一拍就生效（core/config.py 每次读文件的 mtime）。"
   ],
-  "version": "1.5.0",
+  "version": "1.6.0",
   "edition": "open",
   "active": "阿鱼",
   "viewing": "阿鱼",

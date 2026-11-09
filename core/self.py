@@ -338,6 +338,30 @@ class Self:
         rows = store.open_thoughts(self.con, limit)
         return "\n".join(f"- {r['content']}（{r['urge']:.1f}）" for r in rows)
 
+    def last_thoughts_text(self, limit: int = 2) -> str:
+        """上一两轮自己想了什么、最后落到了哪儿。
+
+        think() 原来只看得到 open_thoughts（还没办的念头），办完的当场就被
+        关掉了 —— 于是她每轮都是「第一次想这件事」，同一个问题能重复冒出来十几次。
+        把结局也带上，她才知道「我说过了」「我查过了」「没查着」。
+        """
+        try:
+            rows = store.recent_thoughts(self.con, limit)
+        except Exception:
+            return ""
+        if not rows:
+            return ""
+        lines = []
+        for r in rows:
+            line = f"- 我想：{r['content']}"
+            out = (r.get("outcome") or "").strip()
+            if out:
+                line += f"\n  后来：{out}"
+            elif r.get("status") == "dropped":
+                line += "\n  后来：没做完就放下了"
+            lines.append(line)
+        return "\n".join(lines)
+
     def tasks_text(self, limit: int = 5) -> str:
         """答应过、还没做的事。和「悬着的疑问」分开。"""
         from core import tasks as _t
@@ -459,6 +483,7 @@ class Self:
             "profile": profile_for(s or ""),
             "facts": self.facts_here(s),
             "thoughts": self.thoughts_text(),
+            "last_thoughts": self.last_thoughts_text(),
             "loops": self.loops_text(),
             "tasks": self.tasks_text(),
             "quiet": self.quiet,

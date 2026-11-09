@@ -140,6 +140,7 @@ CREATE TABLE IF NOT EXISTS thoughts (
     urge       REAL NOT NULL DEFAULT 0.5,          -- 0..1 强度
     status     TEXT NOT NULL DEFAULT 'pending',    -- pending|acting|done|dropped
     origin     TEXT,                               -- 触发来源：event id / loop id / tick
+    outcome    TEXT,                               -- 这个念头最后落到哪儿（说了什么/查到什么/没做成）
     scene      TEXT,
     created_at TEXT NOT NULL,
     updated_at TEXT NOT NULL

@@ -94,10 +94,27 @@ ACT_SYSTEM = """你心里有个念头，现在决定怎么处理它。
   没想清楚就先别发。
 - 只输出 JSON，不要解释，不要 markdown。"""
 
+# 一次行动里最多补几次「快速反应」。工具步数本来就少（直播 1 步、聊天 3 步），
+# 这里再卡一道，是因为每次补反应都是一次真金白银的模型调用 ——
+# 宁可她说得糙一点，也不能让一次搜索在后台悄悄烧掉五次调用。
+_MAX_REACT = 2
+
 # 这些念头是「自己心里的活动」，没有明确的接收者时不该外化成话
 INTERNAL_PLANS = {"recall", "browse_bili", "remember", "keep", "feel",
                   "revise_self", "sleep", "search_web", "fetch",
                   "publish_bili", "reflect", "wander", "look"}
+
+# 工具回来后先冒一句心里话。不放进 ACT_SYSTEM 是有意的：
+# 这是一次独立的小调用，输出只有一句话，不该被「输出 JSON」的格式挤掉。
+REACT_SYSTEM = """你刚看到点东西。先别说话，先说心里那一句。
+
+只输出一行，不要 JSON，不要引号，不要解释你在做什么：
+你真实的第一反应。
+
+- 短，像自言自语。一句就够。
+- 不要复述标题、不要总结内容、不要列要点 —— 说你的感觉、你的疑问、你接着想干什么。
+- 看不明白就说不明白，没意思就说没意思。别为了显得热情硬夸。
+- 这是你心里的话，不是要发出去的话。"""
 
 PLAN_HINT = {
     "reply": "你想说句话。",
@@ -139,6 +156,7 @@ def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
     sleep_retry = 0
     made = 0
     media_sent = 0
+    reacted = 0          # 已经为几次工具结果补过「快速反应」
     prompt = _initial_prompt(bot, thought, scene, address_pe=address_pe)
     system = bot.persona_block() + "\n\n" + ACT_SYSTEM
 
@@ -434,6 +452,15 @@ def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
             info = store.pool_add(bot.con, query, query, digest, rows[0].get("url", ""))
             if info["squeezed"]:
                 trace.append(f"暂存区满了，挤掉 {len(info['squeezed'])} 条旧的")
+            # 先让她对这批结果产生一次反应，再把结果摆到决策面前 ——
+            # 不然「读完一坨」和「决定做什么」挤在同一次前向里，会看起来像没看。
+            if reacted < _MAX_REACT:
+                reacted += 1
+                feel = react(bot, brain, what=f"搜「{query}」，搜到这些", content=lines,
+                             thought=thought)
+                if feel:
+                    trace.append(f"看了心里一句：{feel}")
+                    prompt += f"\n\n# 你看到这些，心里冒出一句\n{feel}"
             prompt += f"\n\n# 你搜到的（想细看可以 fetch 某条链接）\n{lines}"
             prompt += _pool_block(bot.con)
             continue
@@ -456,6 +483,13 @@ def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
                 prompt += "\n\n# 那页没什么字。"
                 continue
             trace.append(f"读了：{url[:60]}")
+            if reacted < _MAX_REACT:
+                reacted += 1
+                feel = react(bot, brain, what=f"读了这页（{url[:60]}）", content=text,
+                             thought=thought)
+                if feel:
+                    trace.append(f"读了心里一句：{feel}")
+                    prompt += f"\n\n# 你读完，心里冒出一句\n{feel}"
             prompt += f"\n\n# 你读到的（{url}）\n{text}"
             continue
 
@@ -562,6 +596,13 @@ def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
             browsed += 1
             if r:
                 trace.append(f"看了《{r['title']}》：{r.get('reaction', '')}")
+                body = f"《{r['title']}》\n{r.get('reaction', '')} {r.get('gist', '')}".rstrip()
+                if reacted < _MAX_REACT:
+                    reacted += 1
+                    feel = react(bot, brain, what="看完一个视频", content=body, thought=thought)
+                    if feel:
+                        trace.append(f"看完心里一句：{feel}")
+                        prompt += f"\n\n# 你看完，心里冒出一句\n{feel}"
                 prompt += (f"\n\n# 你刚看了\n《{r['title']}》"
                            f"\n{r.get('reaction', '')} {r.get('gist', '')}".rstrip()
                            + "\n\n（看完了。想说就说，不想说就 wait —— 看了不等于要汇报。）")
@@ -637,7 +678,56 @@ def act(bot: Self, brain: Brain, thought: Thought, *, scene: str | None = None,
         trace.append(f"不认识的动作：{action}")
         break
 
-    return {"spoken": spoken, "trace": trace, "thought": thought.content}
+    return {"spoken": spoken, "trace": trace, "thought": thought.content,
+            "outcome": _outcome(spoken, trace)}
+
+
+def _outcome(spoken: list[str], trace: list[str]) -> str:
+    """把这一轮的流水账压成一句「后来怎么了」，留给下一拍的自己想。
+
+    为什么不用整段 trace：trace 是给日志看的（带路径、带异常名、带挤压条数），
+    原样塞回 prompt 又长又吵，她下一轮只会照着念。这里只留「做了什么」。
+    """
+    bits: list[str] = []
+    if spoken:
+        said = " / ".join(spoken)
+        bits.append(f"说了「{said[:60]}」")
+    for line in trace:
+        if line.startswith("没说："):
+            bits.append("想了一下，没说")
+        elif line.startswith("搜到"):
+            bits.append(line.split("：")[0])
+        elif line.startswith("没搜到"):
+            bits.append(f"没搜到（{line.split('：')[-1][:20]}）")
+        elif line.startswith("读了："):
+            bits.append("读了一页")
+        elif line.startswith("看了《"):
+            title = line.split("《", 1)[-1].split("》", 1)[0]
+            bits.append(f"看了《{title[:30]}》")
+        elif line.startswith("想去看，但没找到"):
+            bits.append("想看点什么，没找到")
+        elif line.startswith("想起"):
+            bits.append("回想起来一些旧事")
+        elif line.startswith("想不起来"):
+            bits.append("想回忆，但没想起来")
+        elif line.startswith(("说了要睡", "去睡了")):
+            bits.append("去睡了")
+        elif line.startswith("把 #"):
+            bits.append("收了一条旧事进记忆")
+        elif line.startswith("记下了"):
+            bits.append("记下了一件事")
+        elif line.startswith("改了「我是谁」"):
+            bits.append("改了自己的说法")
+        elif line.startswith("对") and "好感" in line:
+            bits.append(line.split("（")[0])
+    if not bits:
+        return ""
+    # 同一类只留一句，别变成复读
+    seen: list[str] = []
+    for b in bits:
+        if b not in seen:
+            seen.append(b)
+    return "；".join(seen[:3])[:180]
 
 
 def _address_block(pe: dict | None) -> str:
@@ -650,6 +740,38 @@ def _address_block(pe: dict | None) -> str:
         return ("\n\n# 有人叫错你名字\n" + line) if line else ""
     except Exception:
         return ""
+
+
+def react(bot: Self, brain: Brain, *, what: str, content: str,
+          thought: Thought | None = None) -> str:
+    """工具回来了，先用一轮「短思考」接住它，再决定怎么办。
+
+    为什么值得多花一次调用
+    ----------------------
+    原来工具结果（搜到的条目、读到的网页、看完的视频）是直接拼进下一轮
+    act 的 prompt 里的 —— 模型要一次性同时做两件事：「读完这一大坨」
+    和「决定下一个 JSON 动作」。两个任务挤在一次前向里，结果是
+    要么跳过内容直接说话（看起来像没看），要么照抄标题（看起来像复读）。
+
+    拆开之后：这一轮只负责**产生反应**（一句话，不输出 JSON），
+    下一轮决策拿到的就不只是原始素材，还有「她自己对素材的第一反应」。
+    同一批 token，后者更像人。
+
+    失败一律返回空串 —— 这是锦上添花的一层，不能因为它挂了就不说话。
+    """
+    try:
+        system = bot.persona_block() + "\n\n" + REACT_SYSTEM
+        line = brain.speak(
+            system=system,
+            user=(f"# 你刚才在做什么\n{thought.content if thought else '（没记下）'}\n\n"
+                  f"# 你{what}\n{content[:1200]}\n\n"
+                  "# 现在\n你心里第一句是什么？只输出那一句。"),
+            avoid=[])
+    except Exception:
+        return ""
+    line = (line or "").strip().strip('"“”「」')
+    line = line.splitlines()[0].strip() if line else ""
+    return line[:120]
 
 
 def _initial_prompt(bot: Self, thought: Thought, scene: str,

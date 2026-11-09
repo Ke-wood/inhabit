@@ -30,7 +30,7 @@
 | `relations` | 熟悉度（只涨）+ 好感（可升可降） |
 | `self_state` | 她的状态：心情、精力、睡到几点、身份缓存、各种水位 |
 | `reflections` | 日记与反思（每天一篇，写给自己） |
-| `thoughts` | 念头池（自主模式的核心） |
+| `thoughts` | 念头池（自主模式的核心）。`status` 收场后靠 `outcome` 记住结局 |
 | `open_loops` | 悬而未决的事（「他说的那个事我还没问」） |
 | `search_pool` | 搜到但还没决定记不记的暂存 |
 | `expressions` / `intents` | 预留，当前代码没用 |
