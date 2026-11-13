@@ -22,7 +22,7 @@ LOCAL_SCENE_CHANNELS = tuple(p.rstrip(":") for p in LOCAL_SCENE_PREFIXES)
 
 # 默认值：首次运行或字段缺失时用这些
 DEFAULTS = {
-    "version": "1.6.0",
+    "version": "1.6.1",
     "edition": "open",        # open = 开源版（默认 QQ 通道）；local = 本机自用（微信 hook）
     "active": "阿鱼",          # 正在跑的那个（主循环启动时写）
     "viewing": "阿鱼",         # 面板正在看的那个（可以在跑别的时看另一个）
@@ -217,18 +217,34 @@ def profile_port(name: str | None = None) -> int:
     return 8790 + idx
 
 
+def _port_listening(port: int) -> bool:
+    """本机这个端口有没有人在听。**不建连接**，所以不花时间。
+
+    为什么不用 create_connection：端口没人听时，connect 要等满 timeout 才算
+    「连不上」。面板每次刷新都要问一遍每个角色，两个角色都没启动就是
+    2 × timeout —— 实测 0.4s × 2 = 800ms，页面因此像是卡住了。
+    bind 一个已被监听的本机端口会立刻报 EADDRINUSE，bind 得上就是没人听，
+    整个判断在 0.3ms 内结束（快 2000 倍）。
+    """
+    import socket
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    try:
+        # Windows 上 SO_REUSEADDR 允许 bind 一个正在被监听的端口（危险语义），
+        # 所以这里**不能**打开它，否则永远 bind 得上、永远判成「没在跑」。
+        s.bind(("127.0.0.1", port))
+        return False          # bind 成功 = 没人占着
+    except OSError:
+        return True           # EADDRINUSE = 有人在听
+    finally:
+        s.close()
+
+
 def running_profiles() -> dict:
     """探测每个角色是否在跑（占着端口就是在跑）。"""
-    import socket
     out = {}
     names = list((load().get("profiles") or {}).keys()) or ["阿鱼"]
     for i, n in enumerate(names):
-        try:
-            s = socket.create_connection(("127.0.0.1", 8790 + i), timeout=0.4)
-            s.close()
-            out[n] = True
-        except OSError:
-            out[n] = False
+        out[n] = _port_listening(8790 + i)
     return out
 
 

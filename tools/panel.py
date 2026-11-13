@@ -895,7 +895,12 @@ def _port_busy(port: int) -> bool:
         return False
 
 
-def serve(port: int = 8788) -> None:
+def serve(port: int = 8788, *, tray: bool | None = None) -> None:
+    """起面板。
+
+    托盘有就用托盘（右下角图标，右键能退出），没装 PySide6 就退化成原来那样。
+    不管哪种，HTTP 服务都在后台线程 —— Qt 的事件循环必须占住主线程。
+    """
     url = f"http://127.0.0.1:{port}"
     # 已经在跑：只打开浏览器，不再起第二个
     if _port_busy(port):
@@ -903,17 +908,32 @@ def serve(port: int = 8788) -> None:
         webbrowser.open(url)
         return
     srv = ThreadingHTTPServer(("127.0.0.1", port), Handler)
-    print(f"控制面板: {url}  （Ctrl+C 退出）", flush=True)
+    threading.Thread(target=srv.serve_forever, daemon=True).start()
+
+    from tools import tray as _tray
+    use_tray = _tray.available() if tray is None else (tray and _tray.available())
+    if use_tray:
+        print(f"控制面板: {url}  （托盘图标里可以退出）", flush=True)
+        try:
+            _tray.serve_with_tray(url, port)
+            return
+        except Exception as e:               # 托盘起不来也不能让面板没了
+            print(f"托盘起不来（{type(e).__name__}: {e}），退回无图标模式", flush=True)
+    else:
+        print(f"控制面板: {url}  （Ctrl+C 退出）", flush=True)
+
     threading.Timer(0.8, lambda: webbrowser.open(url)).start()
     try:
-        srv.serve_forever()
+        _tray.serve_headless(url)
     except KeyboardInterrupt:
         pass
 
 
 def main() -> None:
     config.ensure_file()
-    serve(int(sys.argv[1]) if len(sys.argv) > 1 else 8788)
+    argv = [a for a in sys.argv[1:] if not a.startswith("-")]
+    no_tray = "--no-tray" in sys.argv
+    serve(int(argv[0]) if argv else 8788, tray=False if no_tray else None)
 
 
 if __name__ == "__main__":

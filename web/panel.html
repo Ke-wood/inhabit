@@ -542,7 +542,6 @@ async function saveMemory() {
   toast(r.ok ? "记忆已保存" : "失败", !r.ok);
 }
 
-async 
 async function petLoad() {
   try {
     const r = await post("/api/pet", {action: "state"});
@@ -586,13 +585,9 @@ async function checkUpdate(quiet) {
   try {
     const r = await post("/api/update", {action: "check"});
     if (!r.ok) { log.textContent = "检查失败：" + (r.error || "?"); return; }
-    const mine = r.local_notes ? ("
-
-—— 你这一版的说明 ——
-" + r.local_notes) : "";
+    const mine = r.local_notes ? ("\n\n—— 你这一版的说明 ——\n" + r.local_notes) : "";
     log.textContent = r.newer
-      ? ("有新版本：" + r.latest + "（当前 " + r.local + "）
-" + (r.notes || "") + mine)
+      ? ("有新版本：" + r.latest + "（当前 " + r.local + "）\n" + (r.notes || "") + mine)
       : ("已是最新：" + r.local + mine);
     $("btnDoUpdate").style.display = r.newer ? "" : "none";
     if (r.newer && !quiet) {
@@ -604,28 +599,21 @@ async function checkUpdate(quiet) {
 }
 
 async function doUpdate() {
-  if (!confirm("更新会先备份，然后替换程序文件。
-记忆、人设、config、数据库不会被碰。
-
-继续？")) return;
+  if (!confirm("更新会先备份，然后替换程序文件。\n记忆、人设、config、数据库不会被碰。\n\n继续？")) return;
   const log = $("updLog");
   log.style.display = "";
   log.textContent = "更新中，别关页面…";
   try {
     const r = await post("/api/update", {action: "update"});
     log.textContent = (r.ok ? "更新完成，当前版本 " + r.version : "更新失败")
-      + "
-" + (r.note || "") + "
-
-重启后生效。";
+      + "\n" + (r.note || "") + "\n\n重启后生效。";
     $("btnDoUpdate").style.display = "none";
     refresh();
   } catch (e) { log.textContent = "更新出错：" + e; }
 }
 
 async function doRollback() {
-  if (!confirm("回到上一次更新前的版本？
-（只回滚程序文件）")) return;
+  if (!confirm("回到上一次更新前的版本？\n（只回滚程序文件）")) return;
   const log = $("updLog");
   log.style.display = "";
   log.textContent = "回滚中…";
@@ -636,7 +624,7 @@ async function doRollback() {
   } catch (e) { log.textContent = "回滚出错：" + e; }
 }
 
-function switchProfile(name) {
+async function switchProfile(name) {
   const r = await api("/api/profile", {name});
   if (!r.ok) { toast(r.error, true); return; }
   toast("正在查看「" + name + "」");
